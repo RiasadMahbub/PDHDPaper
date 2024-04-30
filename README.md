@@ -24,3 +24,13 @@ What is the code like
     Cloud cover <br> 
     Filter bound the <br> 
 
+
+Manual export
+Load the package: spectral and palettes
+    viridis palettes
+Load the arkansas shapefile file from FAO Gaul 2015 
+Convert the geometry
+
+## Landsat Images
+List  the band names
+
