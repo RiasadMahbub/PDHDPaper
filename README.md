@@ -29,10 +29,60 @@ What is the code like
 - Package Loading:
   - spectral and palettes
   - viridis palettes
-- Load the arkansas shapefile file from FAO Gaul 2015
-- Convert the geometry
+- Load the geospatial data 
+  - the arkansas shapefile file from FAO Gaul 2015
+    - Convert the geometry
+  - NASS cropland dataset filter date 2015
+    - Select the rice cropland class (code 4) from the filtered dataset
 
 
 ## Landsat Images
 List  the band names
+
+
+
+Load function libraries
+Load the image collections
+Split Arkansas into 75 counties
+Get the distinct batch numbers so that the whole analysis of Arkansas is done using different batch numbers and the whole work in split up. Each county is a batch
+Get the images into the batch
+
+Load the NASSCropscape data
+using map function filter the rice layer and clip each images by the arkansas shapefile
+
+1. Check if you can make the code in google earth engine more faster
+2. CDL layer (raster download from website)
+  1. Reproject the raster layers.
+    Raster layer location: 
+
+
+script: ConvertRasterandFilter.R
+ArkansasRiceClippedCrospcapedata: C:\Users\rbmahbub\Documents\Data\GeospatialData\Shapefile\ArkansasRiceClipped\AllShapefile
+Globcarb directory: C:\Users\rbmahbub\Documents\Data\GeospatialData\Shapefile\GloCAB-CroplandFieldBoundary\GloCAB_Field_Boundaries-ClippedbyArkansas\
+GloCAB_Field_Boundaries_Ark.shp
+GlobcarbexportedDirectory: 
+1. Clip GlobCarb using the shapefile of each NassCropscape data using R. Same projection and same crs, same epsg, terra file
+  check crs st_crs
+
+2. Upload Globcarbexported shapefile online 
+
+1. CDL Data: USA different projection
+Project them 
+Clip them with Arkansas
+
+2. 
+
+Used google earth engine to export the images: Too much data failed to export
+Used R to clip and reproject them in same projection: Lack of memory
+Now using AHPCC computing resources to clip 
+
+Data collection can be done for 2008-2020
+
+
+Harvesting date data creation
+1.Manual data collection:
+The directory of the folders: C:\Users\rbmahbub\Documents\Data\GeospatialData\Shapefile\GloCAB-CroplandFieldBoundary\GloCAb_FieldBoundaries-CLippedbyArkRice2008-2020-individual
+Save the edited files in a different directory
+
+
 
