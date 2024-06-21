@@ -1,7 +1,6 @@
 # PDHDPaper
 This repository contains the code, blueprint and dataset of my PD and HD paper
 
-
 Here are some step by step workflow of the code and the paper
 
 Writing the code to extract the NDVI, EVI and everything from google earth engine
@@ -83,6 +82,39 @@ Harvesting date data creation
 1.Manual data collection:
 The directory of the folders: C:\Users\rbmahbub\Documents\Data\GeospatialData\Shapefile\GloCAB-CroplandFieldBoundary\GloCAb_FieldBoundaries-CLippedbyArkRice2008-2020-individual
 Save the edited files in a different directory
+
+
+
+# Collection of the ground truth data:
+1. Whittaker farm has the information 
+2. Isbell farm has the information
+3. Chris Henry has 60-70 farms data
+
+
+Going for trips and collecting the data
+1. Digitizing the data
+
+
+# Temporal duration of the images
+1. 100 features and 365 images, 100*365 = 36500. For 5 years 36500*5 =
+2. Different scripts for different temporal aggregation
+  1. Four months aggreation
+  2. Yearly mean aggregation
+  3. Daily aggregation
+  4. 
+
+1. Spatial aggregation
+  1. Pixel based prediction
+  2. Field -scale mean prediction
+    1. Use mean function in R
+
+
+Post processing of data in R
+1. Convert them to same CRS
+2. Convert them to same projection
+3. Same resolution
+4. Multidimension array
+
 
 
 
