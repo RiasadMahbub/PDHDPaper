@@ -1,0 +1,306 @@
+# Load necessary libraries
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(viridis)
+
+way32015PD <- as.Date("2015-04-08") 
+way42015PD <- as.Date("2015-04-07")
+way32015HD <- as.Date("2015-08-19") 
+way42015HD <- as.Date("2015-08-19")
+# 2016
+way32016PD <- as.Date("2016-04-23") 
+way42016PD <- as.Date("2016-04-23")
+way32016HD <- as.Date("2016-09-13") 
+way42016HD <- as.Date("2016-09-13")
+# 2017
+way32017PD <- as.Date("2017-04-10")
+way42017PD <- as.Date("2017-04-09")
+way32017HD <- as.Date("2017-08-27")
+way42017HD <- as.Date("2017-08-27")
+# 2018
+way32018PD <- as.Date("2018-04-30")
+way42018PD <- as.Date("2018-04-30")
+way32018HD <- as.Date("2018-09-15")
+way42018HD <- as.Date("2018-08-31")
+# 2019
+way32019PD <- as.Date("2019-05-13")
+way42019PD <- as.Date("2019-05-13")
+way32019HD <- as.Date("2019-09-12")
+way42019HD <- as.Date("2019-09-12")
+# 2020
+way32020PD <- as.Date("2020-04-02")
+way42020PD <- as.Date("2020-04-02")
+way32020HD <- as.Date("2020-08-19")
+way42020HD <- as.Date("2020-08-18")
+# 2021
+way32021PD <- as.Date("2021-05-01")
+way42021PD <- as.Date("2021-05-01") 
+way32021HD <- as.Date("2021-09-28")
+way42021HD <- as.Date("2021-09-27")
+
+# 2022
+way32022PD <- as.Date("2022-04-29")
+way42022PD <- as.Date("2022-04-28")
+way32022HD <- as.Date("2022-09-05")
+way42022HD <- as.Date("2022-09-05")
+
+# 2023
+way32023PD <- as.Date("2023-04-14")
+way42023PD <- as.Date("2023-04-12")
+way32023HD <- as.Date("2023-08-26")
+way42023HD <- as.Date("2023-08-23")
+
+# 2024
+way32024PD <- as.Date("2024-04-03")
+way42024PD <- as.Date("2024-04-03")
+way32024HD <- as.Date("2024-08-16") ####edited values ## mail from Bea
+way42024HD <- as.Date("2024-08-16") ####edited values ## mail from Bea
+
+# Define the file paths
+path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/"
+# Read the CSV files
+USHRA_WI2019 <- read.csv(paste0(path, "USHRA_WI2019.csv"))
+USHRA_WT12019 <- read.csv(paste0(path, "USHRA_WT12019.csv"))
+USHRA_LSWI2019 <- read.csv(paste0(path, "USHRA_LSWI2019.csv"))
+USHRA_KNDVI2022 <- read.csv(paste0(path, "USHRA_KNDVI2022.csv"))
+# Convert system.time_start column to Date format
+USHRA_LSWI2019$system.time_start <- mdy(USHRA_LSWI2019$system.time_start)
+USHRA_WT12019$system.time_start <- mdy(USHRA_WT12019$system.time_start)
+USHRA_WI2019$system.time_start <- mdy(USHRA_WI2019$system.time_start)
+USHRA_KNDVI2022$system.time_start <- mdy(USHRA_KNDVI2022$system.time_start)
+
+# Combine datasets with correct variable names
+all_data <- bind_rows(
+  USHRA_LSWI2019 %>% mutate(Source = "USHRA_LSWI2019"),
+  USHRA_WI2019 %>% mutate(Source = "USHRA_WI2019"),
+  USHRA_KNDVI2022 %>% mutate(Source = "USHRA_KNDVI2022")
+)
+
+# Reshape data from wide to long format
+long_data <- all_data %>%
+  pivot_longer(cols = c(SENTINEL_2, LANDSAT_7, LANDSAT_8), 
+               names_to = "Sensor", 
+               values_to = "Value") %>%
+  drop_na(Value)  # Remove rows with NA values
+
+# Extract band name from the 'Source' column
+long_data <- long_data %>%
+  mutate(Band = str_extract(Source, "(?<=USHRA_)[A-Z]+"))
+
+# View the cleaned dataset
+View(long_data)
+# Convert date to month names
+long_data <- long_data %>%
+  mutate(Month = format(system.time_start, "%b"))  # Extract month name
+
+# Ensure system.time_start is in Date format
+long_data <- long_data %>%
+  mutate(system.time_start = as.Date(system.time_start))
+# Ensure system.time_start is in Date format
+long_data <- long_data %>%
+  mutate(system.time_start = as.Date(system.time_start))
+
+# Filter for LSWI and WT
+filtered_data <- long_data %>% filter(Band %in% c("LSWI", "WI"))
+# Define planting and harvesting dates
+way42019HD <- as.Date("2019-09-12")
+way42019PD <- as.Date("2019-05-13")
+# Define custom colors for the sensors
+sensor_colors <- c("SENTINEL_2" = "purple", 
+                   "LANDSAT_7" = "orange", 
+                   "LANDSAT_8" = "#21918c")  # Updated color
+
+# Plot
+ggplot(filtered_data, aes(x = system.time_start, y = Value, color = Sensor, shape = Band)) +
+  geom_point(size = 4, alpha = 0.7) +  # Different shapes for LSWI & WT
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
+  labs(title = "LSWI and WI Values Over Time",
+       x = "Month",
+       y = "Band Values",
+       color = "Sensor",
+       shape = "Band") +
+  geom_vline(xintercept = as.numeric(way42019HD), linetype = "dashed", color = "red", linewidth = 1) +  # Harvest date (purple)
+  geom_vline(xintercept = as.numeric(way42019PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Planting date (orange)
+  annotate("text", x = way42019HD, y = max(filtered_data$Value, na.rm = TRUE), 
+           label = "Harvest Date", color = "red", angle = 90, hjust = 1, vjust = 2) +
+  annotate("text", x = way42019PD, y = max(filtered_data$Value, na.rm = TRUE), 
+           label = "Planting Date", color = "blue", angle = 90, hjust = 1, vjust = 2) +
+  scale_color_manual(values = sensor_colors) +  # Apply custom colors to the sensors
+  theme_minimal() +theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
+                          axis.text.y = element_text(size = 14),  # Increase y-axis text size
+                          axis.title.x = element_text(size = 16),  # Increase x-axis title size
+                          axis.title.y = element_text(size = 16),  # Increase y-axis title size
+                          legend.text = element_text(size = 14),  # Increase legend text size
+                          plot.title = element_text(size = 18),  # Increase plot title size
+                          plot.subtitle = element_text(size = 14))  # Increase subtitle text size
+# Save the plot to the specified directory
+ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/LSWI_WT_Plot.png", width = 10, height = 4)
+
+# Filter the data for kndvi and 2022
+kndvi_data <- long_data %>%
+  filter(Band == "KNDVI" & year(system.time_start) == 2022)
+
+# Define planting and harvesting dates for 2022
+way32022PD <- as.Date("2022-04-29")
+way42022PD <- as.Date("2022-04-28")
+way32022HD <- as.Date("2022-09-05")
+way42022HD <- as.Date("2022-09-05")
+
+# Define custom colors for the sensors
+sensor_colors <- c("SENTINEL_2" = "purple", 
+                   "LANDSAT_7" = "orange", 
+                   "LANDSAT_8" = "#21918c")  # Updated color
+
+# Plot
+ggplot(kndvi_data, aes(x = system.time_start, y = Value, color = Sensor, shape = Band)) +
+  geom_point(size = 3, alpha = 0.7) +  # Different shapes for kndvi
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
+  labs(title = "kNDVI Values Over Time (2022)",
+       x = "Month",
+       y = "kNDVI Value",
+       color = "Sensor",
+       shape = "Band") +
+  geom_vline(xintercept = as.numeric(way42022HD), linetype = "dashed", color = "red", linewidth = 1) +  # Way4 Harvest date (orange)
+  geom_vline(xintercept = as.numeric(way42022PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Way4 Planting date (orange)
+  annotate("text", x = way42022HD, y = max(kndvi_data$Value, na.rm = TRUE), 
+           label = "Way4 Harvest Date", color = "red", angle = 90, vjust = -0.5, hjust = 1) +
+  annotate("text", x = way42022PD, y = max(kndvi_data$Value, na.rm = TRUE), 
+           label = "Way4 Planting Date", color = "blue", angle = 90, vjust = -0.5, hjust = 1) +
+  scale_color_manual(values = sensor_colors) +  # Apply custom colors to the sensors
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+
+
+
+# Filter for Landsat 7 data
+landsat7_data <- kndvi_data %>%
+  filter(Sensor == "LANDSAT_7")
+
+# Plot for Landsat 7
+ggplot(landsat7_data, aes(x = system.time_start, y = Value)) +
+  geom_point(size = 3, alpha = 0.7, color = "#21918c") +  # Landsat 7 color
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
+  labs(title = "kNDVI Values for Landsat 7 (2022)",
+       x = "Month",
+       y = "kNDVI Value") +
+  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +  # Way3 Harvest date
+  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Way3 Planting date
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
+    axis.text.y = element_text(size = 14),  # Increase y-axis text size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title size
+    legend.text = element_text(size = 14),  # Increase legend text size
+    plot.title = element_text(size = 18),  # Increase plot title size
+    plot.subtitle = element_text(size = 14)  # Increase subtitle text size
+  ) +
+  theme(legend.position = "none")  # Remove legend if not needed
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+  # Save the plot to the specified directory
+  ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/kndvil7.png", width = 10, height = 4)
+  
+
+# Filter for Landsat 7 and Landsat 8 data
+landsat7_8_data <- kndvi_data %>%
+  filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8"))
+
+# Plot for Landsat 7 and Landsat 8
+ggplot(landsat7_8_data, aes(x = system.time_start, y = Value, color = Sensor)) +
+  geom_point(size = 3, alpha = 0.7) +  # Different colors for Landsat 7 and Landsat 8
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
+  labs(title = "kNDVI Values for Landsat 7 and Landsat 8 (2022)",
+       x = "Month",
+       y = "kNDVI Value",
+       color = "Sensor") +
+  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +  # Way3 Harvest date
+  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Way3 Planting date
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
+    axis.text.y = element_text(size = 14),  # Increase y-axis text size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title size
+    legend.text = element_text(size = 14),  # Increase legend text size
+    plot.title = element_text(size = 18),  # Increase plot title size
+    plot.subtitle = element_text(size = 14)  # Increase subtitle text size
+  ) +
+  theme(legend.position = "none")  # Remove legend if not needed
+theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+# Save the plot to the specified directory
+ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/kndvil78.png", width = 10, height = 4)
+
+
+# Filter for Landsat 7, Landsat 8, and Sentinel 2 data
+all_sensors_data <- kndvi_data %>%
+  filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8", "SENTINEL_2"))
+
+# Plot for Landsat 7, Landsat 8, and Sentinel 2
+ggplot(all_sensors_data, aes(x = system.time_start, y = Value, color = Sensor)) +
+  geom_point(size = 3, alpha = 0.7) +  # Different colors for each sensor
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
+  labs(title = "kNDVI Values for Landsat 7, Landsat 8, and Sentinel 2 (2022)",
+       x = "Month",
+       y = "kNDVI Value",
+       color = "Sensor") +
+  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +  # Way3 Harvest date
+  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Way3 Planting date
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
+    axis.text.y = element_text(size = 14),  # Increase y-axis text size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title size
+    legend.text = element_text(size = 14),  # Increase legend text size
+    plot.title = element_text(size = 18),  # Increase plot title size
+    plot.subtitle = element_text(size = 14)  # Increase subtitle text size
+  ) +
+  theme(legend.position = "none")  # Remove legend if not needed
+theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+
+# Save the plot to the specified directory
+ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/kndvil78s2.png", width = 10, height = 4)
+
+
+# Define the file path
+file_path <- "C:/Users/rbmahbub/Documents/RProjects/AmeriFluxDataSubmission_LandscapeFlux/Data/InputLocalProcessedData/MasterFiles/Way3/way3_2019.csv"
+# Read the data from the CSV file
+way3_2019 <- read.csv(file_path)
+# Filter the required columns: date, WTD_Avg, and Lvl_m_corr_Avg
+filtered_data <- way3_2019 %>% select(date, WTD_Avg, Lvl_m_Avg)
+# View the filtered data
+head(filtered_data)
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+# Convert the 'date' column to Date format
+
+# Filter to keep only values greater than -10 for 'Lvl_m_corr_Avg'
+filtered_data <- filtered_data %>%
+  filter(Lvl_m_Avg > -10)
+# Convert the 'date' column to Date format
+filtered_data$date <- mdy(filtered_data$date)
+# Plot date vs. Lvl_m_Avg
+ggplot(filtered_data, aes(x = date, y = Lvl_m_Avg)) +
+  geom_point(color = "#3b528b") +  # Scatter plot for data points
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month labels
+  labs(title = "Lvl_m_Avg Over Time (WTD Sensor)",
+       x = "Month",
+       y = "Lvl_m_Avg") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
+    axis.text.y = element_text(size = 14),  # Increase y-axis text size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title size
+    legend.text = element_text(size = 14),  # Increase legend text size
+    plot.title = element_text(size = 18),  # Increase plot title size
+    plot.subtitle = element_text(size = 14)  # Increase subtitle text size
+  ) +
+  theme(legend.position = "none")  # Remove legend if not needed
+
+# Save the plot to the specified directory
+ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/WTD.png", width = 10, height = 4)

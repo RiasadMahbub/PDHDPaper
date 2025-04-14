@@ -2,12 +2,11 @@
 library(sf)
 library(dplyr)
 library(stringr)
-library(dplyr)   # For data manipulation
 library(signal)  # For Savitzky-Golay filter
 library(ggplot2) # For plotting
-# Load necessary libraries
 library(zoo)      # For na.approx (linear interpolation)
 library(signal)   # For sgolayfilt (Savitzky-Golay filter)
+
 ################################
 # Set the directory path########
 ################################
@@ -21,17 +20,13 @@ shp_data_list <- lapply(shapefiles, function(shp) {
   shp_data <- st_read(shp)  # Read the shapefile
   as.data.frame(shp_data)   # Convert to data frame
 })
-
 # Optionally, you can assign data frames to variables named by the shapefile name (without the .shp extension)
 names(shp_data_list) <- sub("\\.shp$", "", shp_file_names)
-
 # Print a preview of the first shapefile's data frame
 head(shp_data_list[[1]])
-
 # List the number of shapefiles read
 num_shp_files <- length(shp_data_list)
 cat("Number of shapefiles read: ", num_shp_files, "\n")
-
 ########Number of Columns########################
 # Function to read shapefile and return number of columns
 get_num_columns <- function(filename) {
@@ -46,12 +41,10 @@ num_columns <- sapply(shapefiles, function(file) get_num_columns(file))
 for (i in 1:length(shp_file_names)) {
   cat(paste(shp_file_names[i], "has", num_columns[i], "columns.\n"))
 }
-
 # Function to read shapefile and return the number of rows
 get_num_rows <- function(filename) {
   # Read shapefile using sf package
   shp <- st_read(filename)
-  
   # Return the number of rows in the shapefile
   return(nrow(shp))
 }
@@ -61,26 +54,22 @@ num_rows <- sapply(shapefiles, function(file) get_num_rows(file))
 for (i in 1:length(shp_file_names)) {
   cat(paste(shp_file_names[i], "has", num_rows[i], "rows.\n"))
 }
-
 ########NUMBER OF LENGTH########################
 # Function to return the length of the filename
 get_filename_length <- function(filename) {
   # Return the number of characters in the filename
   return(nchar(filename))
 }
-
 # Apply the function to all shapefiles and store the results
 filename_lengths <- sapply(shapefiles, function(file) get_filename_length(file))
 # Print the length of the filename for each file
 for (i in 1:length(shp_file_names)) {
   cat(paste(shp_file_names[i], "filename has", filename_lengths[i], "characters.\n"))
 }
-
 # Read the first shapefile to get column names
 example_shp <- st_read(shapefiles[1], quiet = TRUE)  # Read first shapefile
 column_names <- names(example_shp)  # Extract column names
 num_rows <- nrow(example_shp)       # Get number of rows
-
 # Extract dates from shapefile names using regex
 dates <- str_extract(basename(shapefiles), "\\d{8}")  # Extracts the 8-digit date part
 dates <- as.Date(dates, format="%Y%m%d")              # Convert to Date format

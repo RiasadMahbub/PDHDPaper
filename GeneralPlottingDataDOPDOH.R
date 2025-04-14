@@ -1,12 +1,8 @@
 ### plot some DOP and DOH data
-
 ## read the csv file
 dfgroudtruthdata<- read.csv('C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/CG_RiceDOPDOH_201520162018201920202021.csv')
-
 plot(dfgroudtruthdata)
-
 dfgroudtruthdata
-
 library(ggplot2)
 
 # Load the data
