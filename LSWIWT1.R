@@ -104,7 +104,7 @@ long_data <- long_data %>%
   mutate(system.time_start = as.Date(system.time_start))
 
 # Filter for LSWI and WT
-filtered_data <- long_data %>% filter(Band %in% c("LSWI", "WI"))
+filtered_data <- long_data %>% dplyr::filter(Band %in% c("LSWI", "WI"))
 # Define planting and harvesting dates
 way42019HD <- as.Date("2019-09-12")
 way42019PD <- as.Date("2019-05-13")
@@ -141,7 +141,7 @@ ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/LSWI_WT_Plot
 
 # Filter the data for kndvi and 2022
 kndvi_data <- long_data %>%
-  filter(Band == "KNDVI" & year(system.time_start) == 2022)
+  dplyr::filter(Band == "KNDVI" & year(system.time_start) == 2022)
 
 # Define planting and harvesting dates for 2022
 way32022PD <- as.Date("2022-04-29")
@@ -177,7 +177,7 @@ ggplot(kndvi_data, aes(x = system.time_start, y = Value, color = Sensor, shape =
 
 # Filter for Landsat 7 data
 landsat7_data <- kndvi_data %>%
-  filter(Sensor == "LANDSAT_7")
+  dplyr::filter(Sensor == "LANDSAT_7")
 
 # Plot for Landsat 7
 ggplot(landsat7_data, aes(x = system.time_start, y = Value)) +
@@ -205,7 +205,7 @@ ggplot(landsat7_data, aes(x = system.time_start, y = Value)) +
 
 # Filter for Landsat 7 and Landsat 8 data
 landsat7_8_data <- kndvi_data %>%
-  filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8"))
+  dplyr::filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8"))
 
 # Plot for Landsat 7 and Landsat 8
 ggplot(landsat7_8_data, aes(x = system.time_start, y = Value, color = Sensor)) +
@@ -234,29 +234,41 @@ ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/kndvil78.png
 
 # Filter for Landsat 7, Landsat 8, and Sentinel 2 data
 all_sensors_data <- kndvi_data %>%
-  filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8", "SENTINEL_2"))
-
-# Plot for Landsat 7, Landsat 8, and Sentinel 2
+  dplyr::filter(Sensor %in% c("LANDSAT_7", "LANDSAT_8", "SENTINEL_2"))
+# Add a, b, and c points and annotations to the plot
 ggplot(all_sensors_data, aes(x = system.time_start, y = Value, color = Sensor)) +
-  geom_point(size = 3, alpha = 0.7) +  # Different colors for each sensor
-  scale_x_date(date_labels = "%b", date_breaks = "1 month") +  # Show month names
-  labs(title = "kNDVI Values for Landsat 7, Landsat 8, and Sentinel 2 (2022)",
-       x = "Month",
-       y = "kNDVI Value",
-       color = "Sensor") +
-  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +  # Way3 Harvest date
-  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +  # Way3 Planting date
-  theme(
-    axis.text.x = element_text(angle = 0, hjust = 1, size = 14),  # Increase x-axis text size
-    axis.text.y = element_text(size = 14),  # Increase y-axis text size
-    axis.title.x = element_text(size = 16),  # Increase x-axis title size
-    axis.title.y = element_text(size = 16),  # Increase y-axis title size
-    legend.text = element_text(size = 14),  # Increase legend text size
-    plot.title = element_text(size = 18),  # Increase plot title size
-    plot.subtitle = element_text(size = 14)  # Increase subtitle text size
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  labs(
+    title = "kNDVI Values for Landsat 7, Landsat 8, and Sentinel 2 (2022)",
+    x = "Month",
+    y = "kNDVI Value",
+    color = "Sensor"
   ) +
-  theme(legend.position = "none")  # Remove legend if not needed
-theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +
+  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +
+  
+  # Highlight and annotate max peak (c), left min (a), right min (b)
+  geom_point(aes(x = c_date, y = c), color = "black", size = 4, shape = 17) +
+  geom_text(aes(x = c_date, y = c + 0.02), label = "c (peak)", color = "black", size = 5) +
+  
+  geom_point(aes(x = a_date, y = a), color = "darkgreen", size = 4, shape = 15) +
+  geom_text(aes(x = a_date, y = a - 0.02), label = "a (left min)", color = "darkgreen", size = 5) +
+  
+  geom_point(aes(x = b_date, y = b), color = "darkorange", size = 4, shape = 15) +
+  geom_text(aes(x = b_date, y = b - 0.02), label = "b (right min)", color = "darkorange", size = 5) +
+  
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.y = element_text(size = 14),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    plot.title = element_text(size = 18),
+    plot.subtitle = element_text(size = 14)
+  )
+
 
 # Save the plot to the specified directory
 ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/kndvil78s2.png", width = 10, height = 4)
@@ -304,3 +316,57 @@ ggplot(filtered_data, aes(x = date, y = Lvl_m_Avg)) +
 
 # Save the plot to the specified directory
 ggsave("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/VIexample/WTD.png", width = 10, height = 4)
+# Smooth VI series
+vi_smooth <- stats::filter(all_sensors_data$Value, rep(1/3, 3), sides = 2)
+dates <- all_sensors_data$system.time_start
+
+# Identify peak and corresponding date
+c_idx <- which.max(vi_smooth)
+c <- vi_smooth[c_idx]
+c_date <- dates[c_idx]
+
+# Left and right segments
+vi_left <- vi_smooth[1:c_idx]
+vi_right <- vi_smooth[c_idx:length(vi_smooth)]
+date_left <- dates[1:c_idx]
+date_right <- dates[c_idx:length(vi_smooth)]
+
+# Identify left min (a) and right min (b) with their dates
+a <- min(vi_left, na.rm = TRUE)
+b <- min(vi_right, na.rm = TRUE)
+a_date <- date_left[which.min(vi_left)]
+b_date <- date_right[which.min(vi_right)]
+
+# Plot
+ggplot(all_sensors_data, aes(x = system.time_start, y = Value, color = Sensor)) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  labs(
+    title = "kNDVI Values for Landsat 7, Landsat 8, and Sentinel 2 (2022)",
+    x = "Month",
+    y = "kNDVI Value",
+    color = "Sensor"
+  ) +
+  geom_vline(xintercept = as.numeric(way32022HD), linetype = "dashed", color = "red", linewidth = 1) +
+  geom_vline(xintercept = as.numeric(way32022PD), linetype = "dashed", color = "blue", linewidth = 1) +
+  
+  # Annotated points
+  geom_point(aes(x = c_date, y = c), color = "black", size = 4, shape = 17) +
+  geom_text(aes(x = c_date, y = c + 0.02), label = "c (peak)", color = "black", size = 5, vjust = 0) +
+  
+  geom_point(aes(x = a_date, y = a), color = "darkgreen", size = 4, shape = 15) +
+  geom_text(aes(x = a_date, y = a - 0.02), label = "a (left min)", color = "darkgreen", size = 5, vjust = 1) +
+  
+  geom_point(aes(x = b_date, y = b), color = "darkorange", size = 4, shape = 15) +
+  geom_text(aes(x = b_date, y = b - 0.02), label = "b (right min)", color = "darkorange", size = 5, vjust = 1) +
+  
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.y = element_text(size = 14),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    plot.title = element_text(size = 18),
+    plot.subtitle = element_text(size = 14)
+  )

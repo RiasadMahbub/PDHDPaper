@@ -1,9 +1,40 @@
-##################
-# combined_data_cleaned from OrganizeGroundData
+# ==============================================
+# Script: Field Shapefile Processing for Rice Data
+# Purpose: Match field boundaries with planting/harvest dates by year
+# Author: [Your Name]
+# Date: [Current Date]
+
+# OVERVIEW:
+# This script processes agricultural field boundary shapefiles and matches them with
+# planting/harvest date information for rice fields across multiple farms. The main
+# objectives are:
+#
+# 1. Standardize field names across different data sources
+# 2. Match field boundaries with planting/harvest dates by year
+# 3. Create yearly shapefiles for analysis
+# 4. Generate merged datasets for comprehensive analysis
+# 5. Export JavaScript code for visualization in Earth Engine
+
+# DATA SOURCES:
+# - Field boundary shapefiles from multiple farms (Arva, DWMRU, Matt Morris, Sullivan, etc.)
+# - Planting/harvest date records from farm management systems
+# - Additional reference data (points of interest, etc.)
+
+# MAIN PROCESSING STEPS:
+# 1. Load and clean field boundary shapefiles for each farm
+# 2. Standardize field naming conventions across datasets
+# 3. Match field boundaries with planting/harvest dates by year
+# 4. Process each farm's data separately (Arva, DWMRU, etc.)
+# 5. Merge all data into yearly composite shapefiles
+# 6. Create a final merged dataset covering all years
+# 7. Generate JavaScript code for visualization
+# ==============================================
+
+# ----------------------------
+# 1. LIBRARIES
+# ----------------------------
 library(readxl)
 library(lubridate)
-library(readxl)
-library(readxl)
 library(dplyr)
 library(purrr)
 library(writexl)
@@ -11,9 +42,10 @@ library(ggplot2)
 library(stringr)
 library(sf)
 
-##########################################
-###############ARVA#######################
-#########################################
+# ----------------------------
+# 3. ARVA FIELDS PROCESSING
+# ----------------------------
+
 # Define the file path
 shapefile_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva/SHAPEFILE/Arvafieldboundaries.shp"
 arvashp <- st_read(shapefile_path)# Read the shapefile
@@ -137,9 +169,9 @@ output_2024 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva
 st_write(arvamatched_2024, output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
 
-##########################
-######DWMRU################
-###################
+# ----------------------------
+# 5. -----DWMRU ----------
+# ----------------------------
 # Define the file path for the DWMRU shapefile
 shapefile_dwmru_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/DWMRU/DWMRU.shp"
 DWMRU_shp <- st_read(shapefile_dwmru_path)# Read the DWMRU shapefile
@@ -148,6 +180,7 @@ DWMRU_shp <- st_read(shapefile_dwmru_path)# Read the DWMRU shapefile
 DWMRU_shp <- DWMRU_shp %>%
   select(-descriptio, -timestamp, -begin, -end, -altitudeMo, -tessellate, -extrude, -visibility, -drawOrder, -icon) %>%
   rename(FIELD_NAME = Name)
+
 # Replace the values in the 'Field' column based on the given rules
 DWMRU_shp <- DWMRU_shp %>%
   mutate(FIELD_NAME = case_when(
@@ -160,14 +193,15 @@ DWMRU_shp <- DWMRU_shp %>%
     FIELD_NAME == "202" ~ "F_202",
     FIELD_NAME == "16SW" ~ "F_16SW",
     FIELD_NAME == "16NW" ~ "F_16NW",
-    
     TRUE ~ as.character(FIELD_NAME)  # Keep other values unchanged
   ))
+
 # For 2017
 dwmru_datashp_2017 <- DWMRU_rice_data %>% filter(YEAR == 2017) 
 matched_2017 <- inner_join(dwmru_datashp_2017, DWMRU_shp, by = "FIELD_NAME") 
 unmatched_2017 <- anti_join(dwmru_datashp_2017, DWMRU_shp, by = "FIELD_NAME")
 output_2017 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/DWMRU/Yearwise/DWMRUFieldNAMEPD_2017.shp"
+
 # Convert to 2D by removing the Z-coordinate from the geometry
 dwmru_datashp_2017 <- st_as_sf(matched_2017)
 dwmru_datashp_2017 <- st_zm(dwmru_datashp_2017)
@@ -234,10 +268,9 @@ dwmru_datashp_2024  <- st_zm(dwmru_datashp_2024 )
 st_write(dwmru_datashp_2024 , output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
 
-
-##################
-####mattmorris###
-##################
+# ----------------------------
+#  MATT MORRIS
+# ----------------------------
 # Define the file path for the Matt Morris shapefile
 shapefile_mattmorris_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/MattMorrisShapefile/MattMorrisFarm.shp"
 MattMorris_shp <- st_read(shapefile_mattmorris_path)# Read the Matt Morris shapefile
@@ -254,14 +287,14 @@ matt_morris_datashp_2024  <- st_as_sf(matched_2024)
 matt_morris_datashp_2024  <- st_zm(matt_morris_datashp_2024 )
 st_write(matt_morris_datashp_2024 , output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
-################
-####Sullivan###
-################
+
+# ----------------------------
+# SULLIVAN
+# ----------------------------
 # Define the file path for the Sullivan shapefile
 shapefile_sullivan_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/RyanMoore_Sullivan/2023_SFA_Rice_Boundaries.shp"
 sullivanshp <- st_read(shapefile_sullivan_path) %>% select(c(-FIELD_ID, -ORG_ID, -CLIENT_ID, -POLYGONTYP,
                                                              -FARM_ID, -CLIENT_NAM, -FARM_NAME))# Read the Sullivan shapefile
-
 ryan_moore_sullivan_data_2023 <- ryan_moore_sullivan_data %>% filter(YEAR == 2023) ## ONLY ONE YEAR
 matched_2023 <- inner_join(ryan_moore_sullivan_data_2023, sullivanshp, by = "FIELD_NAME")
 unmatched_2023 <- anti_join(ryan_moore_sullivan_data_2023, sullivanshp, by = "FIELD_NAME")
@@ -272,9 +305,9 @@ st_write(sullivan_data_shp_2023 , output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
 
 
-##################
-####scott seeding rice data###
-##################
+# ----------------------------
+# 6. SCOTT SEEDING RICE DATA
+# ----------------------------
 # Define the file path for the Scott Matthews shapefile
 shapefile_scottmatthews_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/ScottMatthewsShapefile/boundaries/boundaries.shp"
 scottmatthewshp <- st_read(shapefile_scottmatthews_path)# Read the Scott Matthews shapefile
@@ -295,9 +328,11 @@ seedingrice_shp_2024  <- st_zm(seedingrice_shp_2024)
 st_write(seedingrice_shp_2024 , output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
 
-################
-####Unilever###
-################
+
+
+# ----------------------------
+#  UNILEVER
+# ----------------------------
 # Define the file path for the Unilever shapefile
 shapefile_unilever_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Unilever/ShapefileRiceFieldsLastUpdate_clippedbyisbellpolygons/UnileverFS_diff_ISbell_polygons.shp"
 unilever_shp <- st_read(shapefile_unilever_path)%>% select(-c( OID_, FolderPath, SymbolID, 
@@ -351,8 +386,6 @@ unilever_data_shp_2018  <- st_zm(unilever_data_shp_2018)
 st_write(unilever_data_shp_2018 , output_2018, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2018, "\n")
 
-
-
 # Filter and save for 2019
 unilever_data_2019 <- unilever_data %>% filter(YEAR == 2019)
 matched_2019 <- inner_join(unilever_data_2019, unilever_shp, by = "FIELD_NAME")
@@ -394,9 +427,30 @@ unilever_data_shp_2022  <- st_zm(unilever_data_shp_2022)
 st_write(unilever_data_shp_2022 , output_2022, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2022, "\n")
 
-################
-####Isbell###
-################
+# Filter and save for 2023
+unilever_data_2023 <- unilever_data %>% filter(YEAR == 2023)
+matched_2023 <- inner_join(unilever_data_2023, unilever_shp, by = "FIELD_NAME")
+unmatched_2023 <- anti_join(unilever_data_2023, unilever_shp, by = "FIELD_NAME")
+output_2023 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Unilever/Yearwise/UnileverPD_2023.shp"
+unilever_data_shp_2023  <- st_as_sf(matched_2023)
+unilever_data_shp_2023  <- st_zm(unilever_data_shp_2023)
+st_write(unilever_data_shp_2023 , output_2023, delete_layer = TRUE)
+cat("Shapefile saved to:", output_2023, "\n")
+
+# Filter and save for 2024
+unilever_data_2024 <- unilever_data %>% filter(YEAR == 2024)
+matched_2024 <- inner_join(unilever_data_2024, unilever_shp, by = "FIELD_NAME")
+unmatched_2024 <- anti_join(unilever_data_2024, unilever_shp, by = "FIELD_NAME")
+output_2024 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Unilever/Yearwise/UnileverPD_2024.shp"
+unilever_data_shp_2024  <- st_as_sf(matched_2024)
+unilever_data_shp_2024  <- st_zm(unilever_data_shp_2024)
+st_write(unilever_data_shp_2024 , output_2024, delete_layer = TRUE)
+cat("Shapefile saved to:", output_2024, "\n")
+unmatched_2023
+unmatched_2024
+# ----------------------------
+# 6. ISBELL
+# ----------------------------
 # Define the file path for the Isbell shapefile
 shapefile_isbell_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/polygons.shp"
 isbellshp <- st_read(shapefile_isbell_path)%>%select(c(-geometry_t, -SP_ID, -NDVI_media))# Read the Isbell shapefile
@@ -530,7 +584,7 @@ shp_not_in_harvestcl <- anti_join(isbellshp, HDmerged_data, by = "FIELD_NAME")
 sort(unique(harvestcl_not_in_shp$FIELD_NAME))
 
 
-#####2015########
+#------------2015--------------
 isbell_2015 <- filter(isbellcl, YEAR == "2015")
 matched_2015 <- inner_join(isbell_2015, isbellshp, by = "FIELD_NAME")
 unmatched_2015 <- anti_join(isbell_2015, isbellshp, by = "FIELD_NAME")
@@ -540,7 +594,7 @@ isbell_data_2015_shp_2015  <- st_zm(isbell_data_2015_shp_2015)
 st_write(isbell_data_2015_shp_2015 , output_2015, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2015, "\n")
 
-#####2016########
+#------------2016#------------
 matched_2016 <- inner_join(isbell_2016, isbellshp, by = "FIELD_NAME")
 unmatched_2016 <- anti_join(isbell_2016, isbellshp, by = "FIELD_NAME")
 output_2016 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2018.shp"
@@ -549,7 +603,7 @@ isbell_data_2016_shp_2016  <- st_zm(isbell_data_2016_shp_2016)
 st_write(isbell_data_2016_shp_2016 , output_2016, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2016, "\n")
 
-#####2017########
+#------------2017#------------
 matched_2017 <- inner_join(isbell_2017, isbellshp, by = "FIELD_NAME")
 unmatched_2017 <- anti_join(isbell_2017, isbellshp, by = "FIELD_NAME")
 output_2017 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2018.shp"
@@ -558,7 +612,7 @@ isbell_data_2017_shp_2017  <- st_zm(isbell_data_2017_shp_2017)
 st_write(isbell_data_2017_shp_2017 , output_2017, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2017, "\n")
 
-#####2018########
+#------------2018#------------
 matched_2018 <- inner_join(isbell_2018, isbellshp, by = "FIELD_NAME")
 unmatched_2018 <- anti_join(isbell_2018, isbellshp, by = "FIELD_NAME")
 output_2018 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2018.shp"
@@ -567,7 +621,7 @@ isbell_data_2018_shp_2018  <- st_zm(isbell_data_2018_shp_2018)
 st_write(isbell_data_2018_shp_2018 , output_2018, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2018, "\n")
 
-#####2019########
+#------------2019#------------
 matched_2019 <- inner_join(isbell_2019, isbellshp, by = "FIELD_NAME")
 unmatched_2019 <- anti_join(isbell_2019, isbellshp, by = "FIELD_NAME")
 output_2019 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2019.shp"
@@ -576,7 +630,7 @@ isbell_data_2019_shp_2019  <- st_zm(isbell_data_2019_shp_2019)
 st_write(isbell_data_2019_shp_2019 , output_2019, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2019, "\n")
 
-#####2020########
+#------------2020#------------
 matched_2020 <- inner_join(isbell_2020, isbellshp, by = "FIELD_NAME")
 unmatched_2020 <- anti_join(isbell_2020, isbellshp, by = "FIELD_NAME")
 output_2020 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2020.shp"
@@ -585,7 +639,7 @@ isbell_data_2020_shp_2020  <- st_zm(isbell_data_2020_shp_2020)
 st_write(isbell_data_2020_shp_2020 , output_2020, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2020, "\n")
 
-#####2021########
+#------------2021#------------
 matched_2021 <- inner_join(isbell_2021, isbellshp, by = "FIELD_NAME")
 unmatched_2021 <- anti_join(isbell_2021, isbellshp, by = "FIELD_NAME")
 output_2021 <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/IsbellFarm/IsbellFarmShapefile/Yearwise/IsbellPD_2021.shp"
@@ -774,8 +828,11 @@ st_write(merged_shapefile, output_merged_path, delete_layer = TRUE)
 filtered_rows <- merged_shapefile[grep("^[0-9]", merged_shapefile$FIELD_NAME), ]
 print(filtered_rows)
 
-####javascript export#############
-##########################################
+# ----------------------------
+# 9. JAVASCRIPT EXPORT
+# ----------------------------
+
+
 #########2015#####################
 ##########################################
 for (value in unique(PDHD2015$FIELD_NAME)) {

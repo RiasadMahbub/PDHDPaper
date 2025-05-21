@@ -102,3 +102,4 @@ dir.create(dirname(output_path), showWarnings = FALSE, recursive = TRUE)
 
 # Save the resulting shapefile
 st_write(union_result, output_path)
+

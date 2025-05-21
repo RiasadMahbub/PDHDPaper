@@ -1,35 +1,41 @@
-library(readxl)
-library(lubridate)
-library(readxl)
-library(readxl)
-library(dplyr)
-library(purrr)
-library(writexl)
-library(ggplot2)
-library(stringr)
-library(sf)# Load the sf package
-####
-#PD = Planting Date
-#DOY = Day of the year
-#FIELD_NAME 
-#YEAR
-#HD = Harvesting Date
-#Source = Provider of the data
-#Harvest data missing = matt_morris_data, scott matthews (seeding_rice_data)
-# ryan_moore_sullivan_data
-# unilever_data
-# isbell_merged_data
-# arva_rice_data
-# seeding_rice_data
-# matt_morris_data
-# unilever_data
-# DWMRU_rice_data
+# --------------------------
+# LOAD REQUIRED PACKAGES
+# --------------------------
+library(readxl)    # For reading Excel files
+library(dplyr)     # For data manipulation
+library(lubridate) # For date handling
+library(stringr)   # For string operations
+library(purrr)     # For functional programming
+library(writexl)   # For writing Excel files
+library(ggplot2)   # For plotting
+library(sf)        # For spatial data handling
 
-# Read the file, PD, FIELD_NAME, year, filter by year
+# --------------------------
+# DATA DICTIONARY
+# --------------------------
+# PD = Planting Date
+# DOY = Day of the year
+# FIELD_NAME = Field identifier
+# YEAR = Year of observation
+# HD = Harvesting Date
+# Source = Provider of the data
 
-##############
-####ARVA######
-##############
+# --------------------------
+# DATA SOURCES
+# --------------------------
+# 1. arva_rice_data
+# 2. DWMRU_rice_data
+# 3. matt_morris_data
+# 4. ryan_moore_sullivan_data
+# 5. unilever_data
+# 6. isbell_merged_data
+# 7. seeding_rice_data
+
+# Note: Harvest data missing for matt_morris_data and scott_matthews (seeding_rice_data)
+
+# ==========================
+# ARVA DATA PROCESSING
+# ==========================
 ## FIELD_NAME = FIELD_INFO_field_id_/ FIELD_INFO_field_name_
 ## PD = PLANTING_date_
 arva_data <- read.csv("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/Arva_Intelligence/ARF - Sustainability Quantification Report.csv")
@@ -50,13 +56,15 @@ arva_rice_data <- arva_rice_data %>%
   # Concatenate the 'FIELD_INFO_field_id_' and 'FIELD_INFO_field_name_' columns
   mutate(FIELD_NAME = paste('F',FIELD_INFO_field_id_, FIELD_INFO_field_name_, sep = "_")) %>%
   rename(PD = PLANTING_date_, # Rename other columns
-         HD = HARVEST_harvest_date_) %>%
-  select(FIELD_NAME, PD, HD)  # Select only the relevant columns
+         HD = HARVEST_harvest_date_,
+         Variety=PLANTING_variety_) %>%
+  select(FIELD_NAME, PD, HD, Variety)  # Select only the relevant columns
 
 arva_rice_data <- arva_rice_data %>%
   mutate(PD = na_if(PD, "")) %>%  # Replace empty strings with NA
-  filter(!is.na(PD))  # Remove rows where PD is NA
+  dplyr::filter(!is.na(PD))  # Remove rows where PD is NA
 
+# Standardize field names
 arva_rice_data <- arva_rice_data %>%
   mutate(FIELD_NAME = FIELD_NAME %>%
            gsub(" - ", "_", .) %>%
@@ -84,12 +92,14 @@ arva_rice_data <- arva_rice_data %>%
 arva_non_rice_data <- arva_non_rice_data %>%
   rename(PD = PLANTING_date_,
          HD = HARVEST_harvest_date_,
-         FIELD_NAME = FIELD_INFO_field_name_) %>%
-  select(FIELD_NAME, PD, HD)  # Select only relevant columns
+         FIELD_NAME = FIELD_INFO_field_name_,
+         Variety=PLANTING_variety_) %>%
+  dplyr::select(FIELD_NAME, PD, HD, Variety)  # Select only relevant columns
 # Replace empty strings with NA and filter out rows where PD is NA
 arva_non_rice_data <- arva_non_rice_data %>%
-  mutate(PD = na_if(PD, "")) %>%  # Replace empty strings with NA
-  filter(!is.na(PD))  # Remove rows where PD is NA
+  dplyr::mutate(PD = na_if(PD, "")) %>%  # Replace empty strings with NA
+  dplyr::filter(!is.na(PD))  # Remove rows where PD is NA
+
 # Ensure PD and HD are in Date format
 arva_rice_data <- arva_rice_data %>%
   mutate(
@@ -102,27 +112,28 @@ arva_rice_data <- arva_rice_data %>%
   )
 
 arva_rice_data$source<-"ARD"
-arva_rice_data_2016 <- arva_rice_data %>% filter(YEAR == 2016) %>% select(-PD, -HD)
-arva_rice_data_2017 <- arva_rice_data %>% filter(YEAR == 2017) %>% select(-PD, -HD)
-arva_rice_data_2018 <- arva_rice_data %>% filter(YEAR == 2018) %>% select(-PD, -HD)
-arva_rice_data_2019 <- arva_rice_data %>% filter(YEAR == 2019) %>% select(-PD, -HD)
-arva_rice_data_2020 <- arva_rice_data %>% filter(YEAR == 2020) %>% select(-PD, -HD)
-arva_rice_data_2021 <- arva_rice_data %>% filter(YEAR == 2021) %>% select(-PD, -HD)
-arva_rice_data_2022 <- arva_rice_data %>% filter(YEAR == 2022) %>% select(-PD, -HD)
-arva_rice_data_2023 <- arva_rice_data %>% filter(YEAR == 2023) %>% select(-PD, -HD)
-arva_rice_data_2024 <- arva_rice_data %>% filter(YEAR == 2024) %>% select(-PD, -HD)
+arva_rice_data_2016 <- arva_rice_data %>% dplyr::filter(YEAR == 2016) %>% select(-PD, -HD)
+arva_rice_data_2017 <- arva_rice_data %>% dplyr::filter(YEAR == 2017) %>% select(-PD, -HD)
+arva_rice_data_2018 <- arva_rice_data %>% dplyr::filter(YEAR == 2018) %>% select(-PD, -HD)
+arva_rice_data_2019 <- arva_rice_data %>% dplyr::filter(YEAR == 2019) %>% select(-PD, -HD)
+arva_rice_data_2020 <- arva_rice_data %>% dplyr::filter(YEAR == 2020) %>% select(-PD, -HD)
+arva_rice_data_2021 <- arva_rice_data %>% dplyr::filter(YEAR == 2021) %>% select(-PD, -HD)
+arva_rice_data_2022 <- arva_rice_data %>% dplyr::filter(YEAR == 2022) %>% select(-PD, -HD)
+arva_rice_data_2023 <- arva_rice_data %>% dplyr::filter(YEAR == 2023) %>% select(-PD, -HD)
+arva_rice_data_2024 <- arva_rice_data %>% dplyr::filter(YEAR == 2024) %>% select(-PD, -HD)
 
-
-##########################
-######DWMRU################
-###################
+# ==========================
+# DWMRU DATA PROCESSING
+# ==========================
 DWMRU_data <- read_excel("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/ColbyReavis/DWMRU_planting_info.xlsx")
+
 DWMRU_rice_data <- subset(DWMRU_data, Crop == "rice")
 DWMRU_rice_data <- rename(DWMRU_rice_data, FIELD_NAME = Field)
 DWMRU_rice_data <- DWMRU_rice_data %>%
   rename(PD = Plant_date, HD = Harvest_date) %>%
   select(FIELD_NAME, PD, HD)
 
+# Standardize field names
 # Replace the values in the 'Field' column based on the given rules
 DWMRU_rice_data <- DWMRU_rice_data %>%
   mutate(FIELD_NAME = case_when(
@@ -149,19 +160,21 @@ DWMRU_rice_data <- DWMRU_rice_data %>%
   select(-PD, -HD)  # Drop the original PD and HD columns
 
 DWMRU_rice_data$source<-"DWMRU"
+DWMRU_rice_data$Variety<-NA
+
 # Filter the data for each year and create a dataframe for each year
-DWMRU_2017 <- DWMRU_rice_data %>% filter(YEAR == 2017)
-DWMRU_2018 <- DWMRU_rice_data %>% filter(YEAR == 2018)
-DWMRU_2020 <- DWMRU_rice_data %>% filter(YEAR == 2020)
-DWMRU_2021 <- DWMRU_rice_data %>% filter(YEAR == 2021)
-DWMRU_2022 <- DWMRU_rice_data %>% filter(YEAR == 2022)
-DWMRU_2023 <- DWMRU_rice_data %>% filter(YEAR == 2023)
-DWMRU_2024 <- DWMRU_rice_data %>% filter(YEAR == 2024)
+DWMRU_2017 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2017)
+DWMRU_2018 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2018)
+DWMRU_2020 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2020)
+DWMRU_2021 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2021)
+DWMRU_2022 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2022)
+DWMRU_2023 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2023)
+DWMRU_2024 <- DWMRU_rice_data %>% dplyr::filter(YEAR == 2024)
 
 
-##############
-####MATTMORRIS#
-##############
+# ==========================
+# MATT MORRIS DATA PROCESSING
+# ==========================
 matt_morris_data <- read_excel("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/MattMorris/MattMorrisPD_9_30_2024.xlsx")
 matt_morris_data <- rename(matt_morris_data, FIELD_NAME = Field)
 matt_morris_data <- matt_morris_data %>%
@@ -171,8 +184,6 @@ matt_morris_data <- matt_morris_data %>%
   rename(PD = PlantingDate) %>%
   select(FIELD_NAME, PD)
 
-#####Year PDdoy, drop pd
-# Ensure PD and HD are in Date format
 # Ensure PD and HD are in Date format, create HD if missing
 matt_morris_data <- matt_morris_data %>%
   mutate(
@@ -187,15 +198,19 @@ matt_morris_data <- matt_morris_data %>%
   select(-PD, -HD)  # Drop PD and HD columns
 
 matt_morris_data$source<-"MMD"
-matt_morris_data_2024 <- matt_morris_data %>% filter(YEAR == 2024)
-##############
-####Sullivan#
-##############
+matt_morris_data$Variety<-NA
+matt_morris_data_2024 <- matt_morris_data %>% dplyr::filter(YEAR == 2024) # Only 2024 data available
+
+# ==========================
+# SULLIVAN DATA PROCESSING
+# ==========================
 ryan_moore_sullivan_data <- read_excel("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/RyanMoore_Sullivan/Sullivan Family Ag-2023 Rice Dates.xlsx")
 ryan_moore_sullivan_data <- rename(ryan_moore_sullivan_data, FIELD_NAME = Field)
 ryan_moore_sullivan_data <- ryan_moore_sullivan_data %>%
-  rename(PD = `Planting Date`, HD = `Harvested Date`) %>%
-  select(FIELD_NAME, PD, HD)
+  rename(PD = `Planting Date`, 
+         HD = `Harvested Date`, 
+         Variety = Variety) %>%
+  dplyr::select(FIELD_NAME, PD, HD, Variety)
 
 
 # Replace "#" with "_" and spaces with "_"
@@ -217,22 +232,21 @@ ryan_moore_sullivan_data <- ryan_moore_sullivan_data %>%
 
 ryan_moore_sullivan_data$source<-"RMS"
 ryan_moore_sullivan_data_2023 <- ryan_moore_sullivan_data %>%
-  filter(YEAR == 2023) ## ONLY ONE YEAR
+  dplyr::filter(YEAR == 2023) ## ONLY ONE YEAR
 
-
-##############
-####Scottmatthews#
-##############
+# ==========================
+# SCOTT MATTHEWS DATA PROCESSING
+# ==========================
 seeding_data <- read_excel("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/ScottMatthews/Seeding_2024.xlsx")
-seeding_rice_data <- subset(seeding_data, `Crop Type` == "Rice")
+seeding_rice_data <- subset(seeding_data, `Crop Type` == "Rice") # Filter for rice crops only
 seeding_rice_data <- seeding_rice_data %>%
   rename(FIELD_NAME = Fields) %>%
-  mutate(FIELD_NAME = paste(Farms, FIELD_NAME, sep = "_"))
+  mutate(FIELD_NAME = paste(Farms, FIELD_NAME, sep = "_")) # Create combined field identifier
 seeding_rice_data <- seeding_rice_data %>%
   mutate(FIELD_NAME = str_trim(FIELD_NAME))
 seeding_rice_data <- seeding_rice_data %>%
-  rename(PD = `First Seeded`) %>%
-  select(FIELD_NAME, PD)
+  rename(PD = `First Seeded`, Variety = Varieties) %>%
+  select(FIELD_NAME, PD, Variety)
 seeding_rice_data <- seeding_rice_data %>%
   mutate(
     PD = as.POSIXct(PD),  # Ensure PD is in POSIXct format for proper handling of date-time
@@ -240,26 +254,33 @@ seeding_rice_data <- seeding_rice_data %>%
     PDDOY = yday(PD),     # Extract the day of year from PD
     HDDOY = NA            # Set HDDOY to NA since HD is NA
   ) %>%
-  select(FIELD_NAME, YEAR, PDDOY, HDDOY)  # Select the relevant columns
+  select(FIELD_NAME, YEAR, PDDOY, HDDOY, Variety)  # Select the relevant columns
 
 seeding_rice_data$source<-"SCM"
 seeding_rice_data_2024 <- seeding_rice_data %>%
-  filter(YEAR == 2024)
-seeding_non_rice_data <- subset(seeding_data, `Crop Type` != "Rice")
+  dplyr::filter(YEAR == 2024)
+seeding_non_rice_data <- subset(seeding_data, `Crop Type` != "Rice") # Filter for non-rice crops
 seeding_non_rice_data<-seeding_non_rice_data %>%
-  rename(FIELD_NAME = Fields) %>%
-  mutate(FIELD_NAME = paste(Farms, FIELD_NAME, sep = "_"))
+  rename(FIELD_NAME = Fields) %>% # Create combined field identifier
+  mutate(FIELD_NAME = paste(Farms, FIELD_NAME, sep = "_"))   # Clean field names
 
-
-###############
-####Unilever###
-###############
+# ================================
+# -------- UNILEVER---------------
+# ================================
 ###check the sheet numnber for this##
-unilever_data <- read_excel("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/Unilever/AllFieldsAllYearsInfoUpdatedFeb2023.xlsx")
+# READ DATA FROM EXCEL (SHEET 2)
+# --------------------------
+unilever_data <- read_excel(
+  path = "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/Unilever/AllFieldsAllYearsInfoUpdatedSep2024_lastversion.xlsx",
+  sheet = 2  # Specify to read the second sheet
+)
+
+# Remove Isbell farm records from Unilever data since we have them 
+# in a separate dataset (processed in the Isbell section below)
 unilever_data <- unilever_data[!(unilever_data$Farm %in% c("Isbell", "Chris Isbell", "Mark Isbell")), ]
 unilever_data <- unilever_data %>%
-  rename(FIELD_NAME = Field, PD = `Planting dates`, HD = `Harvest dates`) %>%
-  select(FIELD_NAME, PD, HD) %>%
+  rename(FIELD_NAME = Field, PD = `Planting dates`, HD = `Harvest dates`, Variety= `Rice cultivar`) %>%
+  select(FIELD_NAME, PD, HD, Variety) %>%
   mutate(YEAR = year(PD))  # Add YEAR column after converting PD to year
 
 unilever_data <- unilever_data %>%
@@ -267,7 +288,7 @@ unilever_data <- unilever_data %>%
     PDDOY = yday(as.Date(PD)),  
     HDDOY = ifelse(!is.na(HD), yday(as.Date(HD)), NA)
   ) %>%
-  select(FIELD_NAME, PDDOY, HDDOY, YEAR)
+  select(FIELD_NAME, PDDOY, HDDOY, YEAR, Variety)
 
 # Replace the values in the 'Field' column based on the given rules
 unilever_data <- unilever_data %>%
@@ -308,13 +329,13 @@ unilever_data <- unilever_data %>%
 
 unilever_data$source<-"UD" ###add the source
 # Now filter year-wise
-unilever_data_2018 <- unilever_data %>% filter(YEAR == 2018)
-unilever_data_2019 <- unilever_data %>% filter(YEAR == 2019)
-unilever_data_2020 <- unilever_data %>% filter(YEAR == 2020)
-unilever_data_2021 <- unilever_data %>% filter(YEAR == 2021)
-unilever_data_2022 <- unilever_data %>% filter(YEAR == 2022)
-unilever_data_2023 <- unilever_data %>% filter(YEAR == 2023)
-unilever_data_2024 <- unilever_data %>% filter(YEAR == 2024)
+unilever_data_2018 <- unilever_data %>% dplyr::filter(YEAR == 2018)
+unilever_data_2019 <- unilever_data %>% dplyr::filter(YEAR == 2019)
+unilever_data_2020 <- unilever_data %>% dplyr::filter(YEAR == 2020)
+unilever_data_2021 <- unilever_data %>% dplyr::filter(YEAR == 2021)
+unilever_data_2022 <- unilever_data %>% dplyr::filter(YEAR == 2022)
+unilever_data_2023 <- unilever_data %>% dplyr::filter(YEAR == 2023)
+unilever_data_2024 <- unilever_data %>% dplyr::filter(YEAR == 2024)
 
 ############
 ####Isbell###
