@@ -323,6 +323,19 @@ unilever_data <- unilever_data %>%
     FIELD_NAME == "T18N" ~ "T18M_Farm_05",
     FIELD_NAME == "T19M" ~ "T19M_Farm_05",
     FIELD_NAME == "Town Square" ~ "Town_Square_Farm_06",
+    FIELD_NAME == "Hartley 2" ~ "Hartley_2",
+    FIELD_NAME == "EM-17" ~ "EM_17",
+    FIELD_NAME == "EM-9E" ~ "EM_9E",
+    FIELD_NAME == "Pond North" ~ "Pond_North",
+    FIELD_NAME == "Pond South" ~ "Pond_South",
+    FIELD_NAME == "South 0" ~ "South_0",
+    FIELD_NAME == "North 0" ~ "North_0",
+    FIELD_NAME == "EM-12" ~ "EM_12",
+    FIELD_NAME == "EM-10" ~ "EM_10",
+    FIELD_NAME == "Schafer SE" ~ "Schafer_SE",
+    FIELD_NAME == "4 East" ~ "4_East",
+    FIELD_NAME == "SW Pond" ~ "SW_Pond",
+    FIELD_NAME == "Field 2" ~ "Field_2",
     TRUE ~ as.character(FIELD_NAME)  # Keep other values unchanged
   ))
 
@@ -337,9 +350,9 @@ unilever_data_2022 <- unilever_data %>% dplyr::filter(YEAR == 2022)
 unilever_data_2023 <- unilever_data %>% dplyr::filter(YEAR == 2023)
 unilever_data_2024 <- unilever_data %>% dplyr::filter(YEAR == 2024)
 
-############
-####Isbell###
-#############
+#==================================
+#ISBELL
+#==================================
 # Define the directory path
 directory_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/IsbellFarm/FlyingRecords"
 # List all .xlsx files in the directory
@@ -588,36 +601,54 @@ xlsx_data$`2024FlyingRecords`$GenerationDry
 
 # Initialize an empty list to store combined data for each year
 isbellcl <- list()
+
 # Iterate over each element in xlsx_data and process the data for each year
 for (year in names(xlsx_data)) {
   # Access the data for each year
   year_data <- xlsx_data[[year]]
-  # Filter only the 'Field' and 'Plant Date' columns for each dataset
-  zero_spray_filtered <- year_data$ZeroSpray[, c("Field", "Plant Date")]
-  generation_dry_filtered <- year_data$GenerationDry[, c("Field", "Plant Date")]
+  # Define a helper function to extract and rename the 'Variety' column
+  extract_variety <- function(df) {
+    # Possible column name variations
+    variety_names <- c("Vrty", "vrty", "Variety", "variety")
+    # Find the first match
+    variety_col <- variety_names[variety_names %in% names(df)]
+    # Filter columns and add/rename 'Variety'
+    if (length(variety_col) > 0) {
+      df <- df[, c("Field", "Plant Date", variety_col[1])]
+      names(df)[3] <- "Variety"
+    } else {
+      df <- df[, c("Field", "Plant Date")]
+      df$Variety <- NA
+    }
+    return(df)
+  }
+  # Apply the helper function to each dataset
+  zero_spray_filtered <- extract_variety(year_data$ZeroSpray)
+  generation_dry_filtered <- extract_variety(year_data$GenerationDry)
   # Bind the filtered data frames for this year
   isbellcl[[year]] <- rbind(zero_spray_filtered, generation_dry_filtered)
 }
-
 # Combine all year data frames into one by rbind
 isbellcl <- do.call(rbind, isbellcl)
+### Remove the rows where Plant Date is NA
+isbellcl <- isbellcl[!is.na(isbellcl$`Plant Date`), ]
+
 isbellcl$`Plant Date` <- as.Date(isbellcl$`Plant Date`) # Convert 'Plant Date' to Date if it's not already
 # Filter rows where year is between 2015 and 2024 and 'Plant Date' is not NA
 isbellcl <- isbellcl[!is.na(isbellcl$`Plant Date`) & #### Remove the rows having year <2015 and >2024
                                       format(isbellcl$`Plant Date`, "%Y") >= 2015 & 
                                       format(isbellcl$`Plant Date`, "%Y") <= 2024, ]
 
-### Remove the rows where Plant Date is NA
-isbellcl <- isbellcl[!is.na(isbellcl$`Plant Date`), ]
+
 ######################################
 # Rename columns####################
 #######################################
 isbellcl <- isbellcl %>%
-  rename(FIELD_NAME = Field, PD = `Plant Date`)
+  rename(FIELD_NAME = Field, PD = `Plant Date`, Variety = Variety)
 # Replace the values in the 'Field' column based on the given rules
 isbellcl <- isbellcl %>%
-  filter(!is.na(PD)) %>%
-  mutate(FIELD_NAME = case_when(
+  dplyr::filter(!is.na(PD)) %>%
+  dplyr::mutate(FIELD_NAME = case_when(
     FIELD_NAME %in% c(1, 1.0, "1", "1.0", "East#1", "East #1") ~ "East_01",
     FIELD_NAME %in% c(2, 2.0, "2", "2.0", "East#2", "East #2") ~ "East_02",
     FIELD_NAME %in% c(3, 3.0, "3", "3.0", "East#3", "East #3") ~ "East_03",
@@ -693,7 +724,8 @@ isbellcl <- isbellcl %>%
     FIELD_NAME == "East Harvey" ~ "East_Harvey",
     FIELD_NAME == "East Joe T" ~ "East_Joe_T",
     FIELD_NAME == "Experiment" ~ "Experiment",
-    FIELD_NAME == "Flat" ~ "Flat",
+    FIELD_NAME %in% c("Flat") ~ "Flat",
+    FIELD_NAME %in% c( "Pop's Flat", "pops flat", "Pops Flat") ~ "Pops_Flat",
     FIELD_NAME == "Frog 40" ~ "Frog_40",
     FIELD_NAME %in% c("Frog 40 NW", "Frog 40  NW") ~ "Frog_40_NW",
     FIELD_NAME == "Haley" ~ "Haley",
@@ -733,27 +765,31 @@ isbellcl <- isbellcl %>%
 isbellcl$YEAR <- format(as.Date(isbellcl$PD), "%Y")
 isbellcl$FIELDNAME_YEAR <- paste(isbellcl$FIELD_NAME, isbellcl$YEAR, sep = "_") ## to merge with HD# Create the new column by concatenating FIELD_NAME and YEAR
 HDmerged_data <- HDmerged_data %>% select(HD, FIELDNAME_YEAR) # Keep only the 'HD' and 'FIELDNAME_YEAR' columns in HDmerged_data
-isbellcl <- full_join(isbellcl, HDmerged_data, by = "FIELDNAME_YEAR")
-isbellcl_inner <- inner_join(isbellcl, HDmerged_data, by = "FIELDNAME_YEAR")
+# Filter isbellcl to only "Isbell" rows and perform inner join
+isbellcl <- isbellcl %>%
+  left_join(HDmerged_data, by = "FIELDNAME_YEAR")
+#isbellcl <- full_join(isbellcl, HDmerged_data, by = "FIELDNAME_YEAR")
+#isbellcl_inner <- inner_join(isbellcl, HDmerged_data, by = "FIELDNAME_YEAR")
 isbellcl_not_in_HD <- anti_join(isbellcl, HDmerged_data, by = "FIELDNAME_YEAR")
 HD_not_in_isbellcl <- anti_join(HDmerged_data, isbellcl, by = "FIELDNAME_YEAR")
 sort(unique(isbellcl_not_in_HD$FIELD_NAME))
 sort(unique(HD_not_in_isbellcl$FIELD_NAME))
 
-isbellcl <- isbellcl %>% mutate(PDDOY = yday(PD), HDDOY = yday(HD)) %>% select(FIELD_NAME, PDDOY, HDDOY, YEAR)
+isbellcl <- isbellcl %>% mutate(PDDOY = yday(PD), HDDOY = yday(HD)) %>% 
+  select(FIELD_NAME, PDDOY, HDDOY, YEAR, Variety)
 
 isbellcl$source<-"Isbell" ###add the source
 # Filter data for each year
-isbell_2015 <- filter(isbellcl, YEAR == "2015")
-isbell_2016 <- filter(isbellcl, YEAR == "2016")
-isbell_2017 <- filter(isbellcl, YEAR == "2017")
-isbell_2018 <- filter(isbellcl, YEAR == "2018")
-isbell_2019 <- filter(isbellcl, YEAR == "2019")
-isbell_2020 <- filter(isbellcl, YEAR == "2020")
-isbell_2021 <- filter(isbellcl, YEAR == "2021")
-isbell_2022 <- filter(isbellcl, YEAR == "2022")
-isbell_2023 <- filter(isbellcl, YEAR == "2023")
-isbell_2024 <- filter(isbellcl, YEAR == "2024")
+isbell_2015 <- dplyr::filter(isbellcl, YEAR == "2015")
+isbell_2016 <- dplyr::filter(isbellcl, YEAR == "2016")
+isbell_2017 <- dplyr::filter(isbellcl, YEAR == "2017")
+isbell_2018 <- dplyr::filter(isbellcl, YEAR == "2018")
+isbell_2019 <- dplyr::filter(isbellcl, YEAR == "2019")
+isbell_2020 <- dplyr::filter(isbellcl, YEAR == "2020")
+isbell_2021 <- dplyr::filter(isbellcl, YEAR == "2021")
+isbell_2022 <- dplyr::filter(isbellcl, YEAR == "2022")
+isbell_2023 <- dplyr::filter(isbellcl, YEAR == "2023")
+isbell_2024 <- dplyr::filter(isbellcl, YEAR == "2024")
 
 sort(unique(isbellcl$FIELD_NAME))
 
@@ -794,26 +830,7 @@ for (df_name in names(dataframes)) {
 }
 
 # Convert the PD column in each dataframe to Date format (yyyy-mm-dd)
-ryan_moore_sullivan_data <- ryan_moore_sullivan_data %>%
-  mutate(PD = as.Date(PD, origin = "1970-01-01"))
 
-unilever_data <- unilever_data %>%
-  mutate(PD = as.Date(PD, origin = "1970-01-01"))
-
-isbellcl <- isbellcl %>%
-  mutate(PD = as.Date(PD))
-
-arva_rice_data <- arva_rice_data %>%
-  mutate(PD = as.Date(PD))
-
-seeding_rice_data <- seeding_rice_data %>%
-  mutate(PD = as.Date(PD, origin = "1970-01-01"))
-
-matt_morris_data <- matt_morris_data %>%
-  mutate(PD = as.Date(PD, origin = "1970-01-01"))
-
-DWMRU_rice_data <- DWMRU_rice_data %>%
-  mutate(PD = as.Date(PD, origin = "1970-01-01"))
 
 
 # List of dataframes
@@ -838,179 +855,206 @@ dataframes <- lapply(dataframes, function(df) {
 
 
 
-# Combine all dataframes into one
+# Convert YEAR to consistent type (character) in all dataframes
+dataframes <- lapply(dataframes, function(df) {
+  if("YEAR" %in% names(df)) {
+    df$YEAR <- as.character(df$YEAR)
+  }
+  return(df)
+})
+
+# Now combine them
 combined_data <- bind_rows(dataframes)
 
-# Assuming your dataframe is named 'combined_data'
-combined_data <- combined_data %>%
-  mutate(PDDOY = yday(PD))
+sum(!is.na(combined_data$HDDOY))
+sum(!is.na(combined_data$PDDOY))
 
+head(sort(combined_data$HDDOY, decreasing = TRUE), 5)
+subset(combined_data, HDDOY == 360)
+##### replace the values of 360 by na
+# Replace HD values with NA where HDDOY is 360
+combined_data$HD[combined_data$HDDOY == 360] <- NA
 
 View(combined_data)
-# Assuming your dataframe is named 'combined_data'
-ggplot(combined_data, aes(x = PD)) +
-  geom_histogram(binwidth = 1, color = "black", fill = "blue", alpha = 0.5) +
-  labs(title = "Histogram of Planting Dates", x = "Planting Date", y = "Count") +
-  theme_minimal() +
-  scale_x_date(date_labels = "%b %d", date_breaks = "1 month")
 
-# Specify the path where you want to save the CSV
-output_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/COMBINEDEXCELSHEET/COMBINEDEXCELSHEET.csv"
-# Write the combined data to CSV
-write.csv(combined_data, file = output_path, row.names = FALSE)
-# Print confirmation message
-cat("CSV file has been written to:", output_path)
-
-
-# Print the 5 lowest values of PDDOY
-min_values <- head(combined_data[order(combined_data$PDDOY), ], 20)
-cat("5 Lowest PDDOY values:\n")
-print(min_values)
-
-# Print the 5 highest values of PDDOY
-max_values <- tail(combined_data[order(combined_data$PDDOY), ], 20)
-cat("\n5 Highest PDDOY values:\n")
-print(max_values)
-
-
-# Find the minimum "Plant Date" for each dataframe in xlsx_data
-min_plant_dates <- sapply(xlsx_data, function(df) min(df$`Plant Date`, na.rm = TRUE))
-# Print the minimum "Plant Date" for each dataset
-print(min_plant_dates)
-
-# Convert numeric values to Date (assuming the reference date is 1970-01-01)
-min_plant_dates_converted <- as.Date(min_plant_dates, origin = "1970-01-01")
-
-# Print the converted minimum "Plant Date" for each dataset in yyyy-mm-dd format
-print(min_plant_dates_converted)
-
-xlsx_data$`2015FlyingRecords`$`Plant Date`
-
-###After checking the data we removed walls11 which is 49 
-combined_data_cleaned <- combined_data[-which.min(combined_data$PDDOY), ]
-
-# Create the histogram
-ggplot(combined_data_cleaned, aes(x=PDDOY)) +
-  geom_histogram() +
-  xlab("Day of planting") +
-  ylab("Frequency") +
-  scale_x_continuous(breaks = seq(0, 170, by = 10)) +
-  # Mean line (red)
-  geom_vline(aes(xintercept = mean(PDDOY, na.rm = TRUE)), col='red', size=2, linetype="solid") +
-  # Mode line (blue)
-  geom_vline(aes(xintercept = as.numeric(names(sort(table(PDDOY), decreasing = TRUE))[1])), col='blue', size=2, linetype="dashed") +
-  # Median line (green)
-  geom_vline(aes(xintercept = median(PDDOY, na.rm = TRUE)), col='green', size=2, linetype="dotted") +
-  annotate("text", x = 170, y = 100, label = paste0("Number of observations= ", nrow(combined_data_cleaned)), size =6) +
-  scale_color_manual(name = "Statistic", values = c("mean" = "red", "mode" = "blue", "median" = "green"), 
-                     breaks = c("mean", "mode", "median"), labels = c("Mean", "Mode", "Median")) +
-  theme_classic() +
-  theme(text = element_text(size = 24))
-
-# Calculate the mean of PDDOY
-mean_PDDOY <- mean(combined_data_cleaned$PDDOY, na.rm = TRUE)
-
-# Calculate the median of PDDOY
-median_PDDOY <- median(combined_data_cleaned$PDDOY, na.rm = TRUE)
-
-# Calculate the mode of PDDOY
-mode_PDDOY <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
-}
-mode_PDDOY <- mode_PDDOY(combined_data_cleaned$PDDOY)
-
-# Print the results
-cat("The mean is", round(mean_PDDOY, 2), 
-    ", the median is", median_PDDOY, 
-    ", the mode is", mode_PDDOY, "\n")
-
-
-print(table(combined_data_cleaned$source))
-
-
-
-
-
-
-
-
-
-
-##################SHP FIles#############
-
-# Define the file path
-shapefile_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva/SHAPEFILE/Arvafieldboundaries.shp"
-# Read the shapefile
-arvashp <- st_read(shapefile_path)
-arvashp$field_id
-arvashp$field_name
-# Concatenate the 'field_id' and 'field_name' columns to create the 'FIELD_NAME' column
-arvashp$FIELD_NAME <- paste(arvashp$field_id, arvashp$field_name, sep = "_")
-# Use dplyr's mutate and gsub to edit the FIELD_NAME column
-arvashp <- arvashp %>%
-  mutate(FIELD_NAME = FIELD_NAME %>%
-           gsub(" - ", "_", .) %>%
-           gsub("#", "_", .) %>%
-           gsub("Reservoir", "Res", .) %>%
-           gsub("South", "S", .) %>%
-           gsub("North", "N", .) %>%
-           gsub("East", "E", .) %>%
-           gsub("Airstrip", "AP", .) %>%
-           gsub("Main Field", "MF", .) %>%
-           gsub("Willingham", "Wg", .) %>%
-           gsub("Person", "Pn", .) %>%
-           gsub("Martin Place", "MP", .) %>%
-           gsub("Black Shop", "BS", .) %>%
-           gsub("Smith Half Moon", "SHM", .) %>%
-           gsub("Smith", "Sm", .) %>%
-           gsub("Hemp Field", "HF", .) %>%
-           gsub("West", "W", .) %>%
-           gsub("Birdoe", "BD", .) %>%
-           gsub("Carter", "Cr", .) %>%  # Replace "Carter" with "Cr"
-           gsub(" ", "_", .) %>%  # Replace spaces with "_"
-           gsub("__", "_", .))  # Replace double underscores with a single "_"
-# View the modified data
-print(head(arvashp))
-# Drop the 'field_hash' column
-arvashp <- arvashp %>%
-  select(-field_hash)
-# Define the output file path
-output_shapefile_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva/SHAPEFILE/RenamedFieldNames/Arvafieldnames.shp"
-# Save the modified shapefile
-st_write(arvashp, output_shapefile_path)
-# Confirm the save
-cat("Shapefile saved to:", output_shapefile_path)
-
-
-
-
-
-
-
-
-
-
-
-#################################
-#################################
-######old reading Isbell###3
-#################################
-#################################
-#################################
-directory_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/IsbellFarm/FlyingRecords"
-# List all .xlsx files in the directory
-xlsx_files <- list.files(path = directory_path, pattern = "\\.xlsx$", full.names = TRUE)
-# Read each .xlsx file into a named list of data frames
-xlsx_data <- lapply(xlsx_files, read_excel)
-# Name the list elements based on the file names (without the directory and extension)
-names(xlsx_data) <- gsub(" ", "", gsub("\\.xlsx$", "", basename(xlsx_files)))
-print(names(xlsx_data))
-
-# Convert 'Plant Date' column from numeric to Date format for each sheet
-# 2015 Flying Records
-xlsx_data$`2015FlyingRecords`$`Plant Date` <- as.Date(
-  xlsx_data$`2015FlyingRecords`$`Plant Date`, origin = "1899-12-30"
-)
-xlsx_data$`2015FlyingRecords`$`Plant Date`[xlsx_data$`2015FlyingRecords`$`Plant Date` < as.Date("1900-01-01")] <- NA
-print(xlsx_data$`2015FlyingRecords`$`Plant Date`)
+#============================================================================
+#============================================================================
+#============================================================================
+#============================================================================
+#============================================================================
+#============================================================================
+# 
+# 
+# 
+# combined_data$PD<-as.numeric((combined_data$PD))
+# 
+# ggplot(combined_data, aes(x = PDDOY)) +
+#   geom_histogram(binwidth = 5, color = "black", fill = "blue", alpha = 0.7) +
+#   labs(
+#     title = "Histogram of Planting Dates (Day of Year)",
+#     x = "Planting Day of Year (1-366)",
+#     y = "Count"
+#   ) +
+#   theme_minimal() +
+#   scale_x_continuous(breaks = seq(0, 366, by = 30))  # Breaks every 30 days
+# 
+# # Specify the path where you want to save the CSV
+# output_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/COMBINEDEXCELSHEET/COMBINEDEXCELSHEET.csv"
+# # Write the combined data to CSV
+# write.csv(combined_data, file = output_path, row.names = FALSE)
+# # Print confirmation message
+# cat("CSV file has been written to:", output_path)
+# 
+# 
+# # Print the 5 lowest values of PDDOY
+# min_values <- head(combined_data[order(combined_data$PDDOY), ], 20)
+# cat("5 Lowest PDDOY values:\n")
+# print(min_values)
+# 
+# # Print the 5 highest values of PDDOY
+# max_values <- tail(combined_data[order(combined_data$PDDOY), ], 20)
+# cat("\n5 Highest PDDOY values:\n")
+# print(max_values)
+# 
+# 
+# # Find the minimum "Plant Date" for each dataframe in xlsx_data
+# min_plant_dates <- sapply(xlsx_data, function(df) min(df$`Plant Date`, na.rm = TRUE))
+# # Print the minimum "Plant Date" for each dataset
+# print(min_plant_dates)
+# 
+# # Convert numeric values to Date (assuming the reference date is 1970-01-01)
+# min_plant_dates_converted <- as.Date(min_plant_dates, origin = "1970-01-01")
+# 
+# # Print the converted minimum "Plant Date" for each dataset in yyyy-mm-dd format
+# print(min_plant_dates_converted)
+# 
+# xlsx_data$`2015FlyingRecords`$`Plant Date`
+# 
+# ###After checking the data we removed walls11 which is 49 
+# combined_data_cleaned <- combined_data[-which.min(combined_data$PDDOY), ]
+# 
+# # Create the histogram
+# ggplot(combined_data_cleaned, aes(x=PDDOY)) +
+#   geom_histogram() +
+#   xlab("Day of planting") +
+#   ylab("Frequency") +
+#   scale_x_continuous(breaks = seq(0, 170, by = 10)) +
+#   # Mean line (red)
+#   geom_vline(aes(xintercept = mean(PDDOY, na.rm = TRUE)), col='red', size=2, linetype="solid") +
+#   # Mode line (blue)
+#   geom_vline(aes(xintercept = as.numeric(names(sort(table(PDDOY), decreasing = TRUE))[1])), col='blue', size=2, linetype="dashed") +
+#   # Median line (green)
+#   geom_vline(aes(xintercept = median(PDDOY, na.rm = TRUE)), col='green', size=2, linetype="dotted") +
+#   annotate("text", x = 170, y = 100, label = paste0("Number of observations= ", nrow(combined_data_cleaned)), size =6) +
+#   scale_color_manual(name = "Statistic", values = c("mean" = "red", "mode" = "blue", "median" = "green"), 
+#                      breaks = c("mean", "mode", "median"), labels = c("Mean", "Mode", "Median")) +
+#   theme_classic() +
+#   theme(text = element_text(size = 24))
+# 
+# # Calculate the mean of PDDOY
+# mean_PDDOY <- mean(combined_data_cleaned$PDDOY, na.rm = TRUE)
+# 
+# # Calculate the median of PDDOY
+# median_PDDOY <- median(combined_data_cleaned$PDDOY, na.rm = TRUE)
+# 
+# # Calculate the mode of PDDOY
+# mode_PDDOY <- function(x) {
+#   ux <- unique(x)
+#   ux[which.max(tabulate(match(x, ux)))]
+# }
+# mode_PDDOY <- mode_PDDOY(combined_data_cleaned$PDDOY)
+# 
+# # Print the results
+# cat("The mean is", round(mean_PDDOY, 2), 
+#     ", the median is", median_PDDOY, 
+#     ", the mode is", mode_PDDOY, "\n")
+# 
+# 
+# print(table(combined_data_cleaned$source))
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# ##################SHP FIles#############
+# 
+# # Define the file path
+# shapefile_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva/SHAPEFILE/Arvafieldboundaries.shp"
+# # Read the shapefile
+# arvashp <- st_read(shapefile_path)
+# arvashp$field_id
+# arvashp$field_name
+# # Concatenate the 'field_id' and 'field_name' columns to create the 'FIELD_NAME' column
+# arvashp$FIELD_NAME <- paste(arvashp$field_id, arvashp$field_name, sep = "_")
+# # Use dplyr's mutate and gsub to edit the FIELD_NAME column
+# arvashp <- arvashp %>%
+#   mutate(FIELD_NAME = FIELD_NAME %>%
+#            gsub(" - ", "_", .) %>%
+#            gsub("#", "_", .) %>%
+#            gsub("Reservoir", "Res", .) %>%
+#            gsub("South", "S", .) %>%
+#            gsub("North", "N", .) %>%
+#            gsub("East", "E", .) %>%
+#            gsub("Airstrip", "AP", .) %>%
+#            gsub("Main Field", "MF", .) %>%
+#            gsub("Willingham", "Wg", .) %>%
+#            gsub("Person", "Pn", .) %>%
+#            gsub("Martin Place", "MP", .) %>%
+#            gsub("Black Shop", "BS", .) %>%
+#            gsub("Smith Half Moon", "SHM", .) %>%
+#            gsub("Smith", "Sm", .) %>%
+#            gsub("Hemp Field", "HF", .) %>%
+#            gsub("West", "W", .) %>%
+#            gsub("Birdoe", "BD", .) %>%
+#            gsub("Carter", "Cr", .) %>%  # Replace "Carter" with "Cr"
+#            gsub(" ", "_", .) %>%  # Replace spaces with "_"
+#            gsub("__", "_", .))  # Replace double underscores with a single "_"
+# # View the modified data
+# print(head(arvashp))
+# # Drop the 'field_hash' column
+# arvashp <- arvashp %>%
+#   select(-field_hash)
+# # Define the output file path
+# output_shapefile_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Arva/SHAPEFILE/RenamedFieldNames/Arvafieldnames.shp"
+# # Save the modified shapefile
+# st_write(arvashp, output_shapefile_path)
+# # Confirm the save
+# cat("Shapefile saved to:", output_shapefile_path)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# #################################
+# #################################
+# ######old reading Isbell###3
+# #################################
+# #################################
+# #################################
+# directory_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/IsbellFarm/FlyingRecords"
+# # List all .xlsx files in the directory
+# xlsx_files <- list.files(path = directory_path, pattern = "\\.xlsx$", full.names = TRUE)
+# # Read each .xlsx file into a named list of data frames
+# xlsx_data <- lapply(xlsx_files, read_excel)
+# # Name the list elements based on the file names (without the directory and extension)
+# names(xlsx_data) <- gsub(" ", "", gsub("\\.xlsx$", "", basename(xlsx_files)))
+# print(names(xlsx_data))
+# 
+# # Convert 'Plant Date' column from numeric to Date format for each sheet
+# # 2015 Flying Records
+# xlsx_data$`2015FlyingRecords`$`Plant Date` <- as.Date(
+#   xlsx_data$`2015FlyingRecords`$`Plant Date`, origin = "1899-12-30"
+# )
+# xlsx_data$`2015FlyingRecords`$`Plant Date`[xlsx_data$`2015FlyingRecords`$`Plant Date` < as.Date("1900-01-01")] <- NA
+# print(xlsx_data$`2015FlyingRecords`$`Plant Date`)

@@ -1,21 +1,30 @@
+# Load required libraries
 library(readxl)
 library(dplyr)
-###IsbellFieldName underscore (_) than space
-#### Files 2019, 2020, 2021, and 2022 the sheet numbers were modified
-#### Field names 2021, and 2022 and 2023 needs to be shortened from the prefix and suffices
+
+#==========================================
+###### File Preparation Notes ##########
+#==========================================
+# Isbell FieldName uses underscore (_) instead of space
+# For files 2019, 2020, 2021, and 2022 the sheet numbers were modified
+# Field names for 2021, 2022 and 2023 need to be shortened from prefix/suffixes
 
 ########################################
-###### Read the Files########
+###### Read and Process Excel Files ####
 ########################################
-# Define the directory path
+# Define directory path
 directory_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/GroundTruthData/IsbellFarm/YieldMapsIsbells"
-# List all .xlsx files in the directory
-xlsx_files <- list.files(path = directory_path, pattern = "\\.xlsx$", full.names = TRUE)
-# Read each .xlsx file into a named list of data frames
-xlsx_data <- lapply(xlsx_files, read_excel)
-# Name the list elements based on the file names (remove directory and extension, also remove spaces)
-names(xlsx_data) <- gsub(" ", "", gsub("\\.xlsx$", "", basename(xlsx_files)))
 
+# List all .xlsx files in directory
+xlsx_files <- list.files(path = directory_path, 
+                         pattern = "\\.xlsx$", 
+                         full.names = TRUE)
+
+# Read each .xlsx file into named list of data frames
+xlsx_data <- lapply(xlsx_files, read_excel)
+
+# Clean file names for list elements
+names(xlsx_data) <- gsub(" ", "", gsub("\\.xlsx$", "", basename(xlsx_files)))
 
 ########################################
 ###### Print the names of the columns
@@ -67,6 +76,8 @@ for (df_name in names(xlsx_data)) {
   # Create 'year' column by extracting the year from 'HD'
   xlsx_data[[df_name]]$year <- format(xlsx_data[[df_name]]$HD, "%Y")
 }
+
+
 ########################################
 ###### Print the FIELD_NAME column######
 ########################################
@@ -86,7 +97,7 @@ for (df_name in names(xlsx_data)) {
 xlsx_data$AllFields2023Summary_v2024_09_24$FIELD_NAME
 xlsx_data$AllFields2022Summary_v2024_09_24$FIELD_NAME
 xlsx_data$AllFields2021Summary_v2024_09_24$FIELD_NAME
-
+View(xlsx_data$AllFields2022Summary_v2024_09_24)
 
 # Remove the prefix "Generation F_Generation F_" 
 # Remove the suffix "_Harvest_YYYY-MM-DD_00.shp"
@@ -123,7 +134,7 @@ HDmerged_data <- HDmerged_data %>%
     FIELD_NAME %in% c(12, 12.0, "12", "12.0", "East#12", "east_12") ~ "East_12",
     FIELD_NAME %in% c(13, 13.0, "13", "13.0", "East#13", "east_13") ~ "East_13",
     FIELD_NAME %in% c(14, 14.0, "14", "14.0", "East#14", "east_14") ~ "East_14",
-    FIELD_NAME == "Baker 20" ~ "Baker_20",
+    FIELD_NAME %in% c("Baker 20", "Baker_20_Harvest_2022-09-15_1_00.shp") ~ "Baker_20",
     FIELD_NAME == "Baker 30" ~ "Baker_30",
     FIELD_NAME == "Baker 40" ~ "Baker_40",
     FIELD_NAME == "Baker 50" ~ "Baker_50",
@@ -181,12 +192,13 @@ HDmerged_data <- HDmerged_data %>%
     FIELD_NAME %in% c( "Cattlet 1", "Cattlet Top", "catlett top") ~ "Cattlet_01",
     FIELD_NAME %in% c( "Cattlet 2", "Cattlet Bott", "cattlet bottom") ~ "Cattlet_02",
     FIELD_NAME == "Cattlet 2" ~ "Cattlet_02",
-    FIELD_NAME == "Cotton Patch" ~ "Cotton_Patch",
+    FIELD_NAME %in% c( "Cotton Patch", "Cotton Patch_Harvest_2022-08-26_1_00.shp") ~ "Cotton_Patch",
     FIELD_NAME %in% c("East Harvey", "Top Harvey") ~ "East_Harvey",
     FIELD_NAME == "East Harvey" ~ "East_Harvey",
     FIELD_NAME %in% c("East Joe T", "Joe T East") ~ "East_Joe_T",
     FIELD_NAME == "Experiment" ~ "Experiment",
-    FIELD_NAME %in% c("Flat", "Pop's Flat", "pops flat", "Pops Flat") ~ "Flat",
+    FIELD_NAME %in% c("Flat") ~ "Flat",
+    FIELD_NAME %in% c( "Pop's Flat", "pops flat", "Pops Flat") ~ "Pops_Flat",
     FIELD_NAME == "Frog 40" ~ "Frog_40",
     FIELD_NAME %in% c("Frog 40 NW", "Frog 40  NW") ~ "Frog_40_NW",
     FIELD_NAME == "Haley" ~ "Haley",
@@ -202,7 +214,7 @@ HDmerged_data <- HDmerged_data %>%
     FIELD_NAME == "Lyntz" ~ "Lyntz",
     FIELD_NAME %in% c("Md 40 West", "Md_40 West", 'middle_40 west', "West Mid_40") ~ "Md_40_West",
     FIELD_NAME == "Md 40 West MidW" ~ "Md_40_West_MidW",
-    FIELD_NAME %in% c("Mid 40 Hwy", "Mid_40 Hwy") ~ "Mid_40_Hwy",
+    FIELD_NAME %in% c("Mid 40 Hwy", "Mid_40 Hwy", "Mid_40 Hwy_Harvest_2021-09-09_1_00.shp") ~ "Mid_40_Hwy",
     FIELD_NAME %in% c('Mid 40 Hwy MidE') ~ "Mid_40_Hwy_MidE",
     FIELD_NAME %in% c("Middle Bransford", "Mid Bransford", "Middle Brans") ~ "Mid_Bransford",
     FIELD_NAME == "Morris" ~ "Morris",
@@ -210,12 +222,12 @@ HDmerged_data <- HDmerged_data %>%
     FIELD_NAME == "North Cotton" ~ "North_Cotton",
     FIELD_NAME %in% c( "Pop's Field", "Pops Field") ~ "Pops",
     FIELD_NAME == "Pops" ~ "Pops",
-    FIELD_NAME == "Seed Rice" ~ "Seed_Rice",
+    FIELD_NAME %in% c( "Seed Rice", "Seed Rice_Harvest_2022-10-25_1_00.shp") ~ "Seed_Rice",
     FIELD_NAME %in% c( "Shanes", "Shane's") ~ "Shanes",
     FIELD_NAME == "SI Shop" ~ "SI_Shop",
     FIELD_NAME %in% c( "The 90", "90") ~ "The_90",
     FIELD_NAME == "Walls 6 +7" ~ "Walls_06_07",
-    FIELD_NAME %in% c("West Harvey", "Bottom Harvey", "Bottom Harve") ~ "East_Harvey",
+    FIELD_NAME %in% c("West Harvey", "Bottom Harvey", "Bottom Harve") ~ "West_Harvey",
     FIELD_NAME == "West Harvey" ~ "West_Harvey",
     FIELD_NAME  %in% c( "West Joe T", "Joe T West") ~ "West_Joe_T",
     FIELD_NAME %in% c( "West Bransfo", "West Bransford", "Wst Bransford") ~ "Wst_Bransford",
@@ -225,11 +237,29 @@ HDmerged_data <- HDmerged_data %>%
     TRUE ~ as.character(FIELD_NAME)  # Keep other values unchanged
   ))
 
-sort(unique(isbellcl$FIELD_NAME))
+#sort(unique(isbellcl$FIELD_NAME))
 sort(unique(HDmerged_data$FIELD_NAME))
-sort(unique(HD_not_in_isbellcl$FIELD_NAME))
+
+# Fields in isbellcl but not in HDmerged_data
+#setdiff(unique(isbellcl$FIELD_NAME), unique(HDmerged_data$FIELD_NAME))
+# Fields in HDmerged_data but not in isbellcl
+#setdiff(unique(HDmerged_data$FIELD_NAME), unique(isbellcl$FIELD_NAME))
+
+#sort(unique(HD_not_in_isbellcl$FIELD_NAME))
 # Create a new column by concatenating FIELD_NAME and Year
 HDmerged_data$FIELDNAME_YEAR <- paste(HDmerged_data$FIELD_NAME, HDmerged_data$year, sep = "_")
+
+HDmerged_data$FIELDNAME_YEAR 
+
+View(HDmerged_data)
+#======================================================================================
+
+
+
+
+
+
+
 
 
 
@@ -244,13 +274,10 @@ for (df_name in names(xlsx_data)) {
   if ("FIELD_NAME" %in% colnames(xlsx_data[[df_name]])) {
     # Remove the unwanted parts using regular expressions
     cleaned_field_name <- xlsx_data[[df_name]]$FIELD_NAME
-    
     # Remove the "Generation F_Generation F_" and "_Harvest_YYYY-MM-DD_00.shp" part
     cleaned_field_name <- gsub("^Generation F_Generation F_|_Harvest_\\d{4}-\\d{2}-\\d{2}_00\\.shp$", "", cleaned_field_name)
-    
     # Remove the "Zero Grade F_Zero Grade F_" part
     cleaned_field_name <- gsub("^Zero Grade F_Zero Grade F_", "", cleaned_field_name)
-    
     # Print the cleaned 'FIELD_NAME'
     print(cleaned_field_name)
   } else {
@@ -263,22 +290,17 @@ for (df_name in names(xlsx_data)) {
 for (df_name in names(xlsx_data)) {
   cat("\nData frame:", df_name, "\n")
   cat("Cleaned FIELD_NAME column:\n")
-  
   # Check if 'FIELD_NAME' exists in the data frame
   if ("FIELD_NAME" %in% colnames(xlsx_data[[df_name]])) {
     # Remove the unwanted parts using regular expressions
     cleaned_field_name <- xlsx_data[[df_name]]$FIELD_NAME
-    
     # Remove the "Generation F_Generation F_" and "_Harvest_YYYY-MM-DD_00.shp" part
     cleaned_field_name <- gsub("^Generation F_Generation F_|_Harvest_\\d{4}-\\d{2}-\\d{2}_00\\.shp$", "", cleaned_field_name)
-    
     # Remove the "Zero Grade F_Zero Grade F_" part
     cleaned_field_name <- gsub("^Zero Grade F_Zero Grade F_", "", cleaned_field_name)
-    
     # Remove the new "Zero Grade F_Zero Grade F_" and "_Harvest_YYYY-MM-DD_00.shp" part
     cleaned_field_name <- gsub("^Zero Grade F_Zero Grade F_", "", cleaned_field_name)
     cleaned_field_name <- gsub("_Harvest_\\d{4}-\\d{2}-\\d{2}_00\\.shp$", "", cleaned_field_name)
-    
     # Print the cleaned 'FIELD_NAME'
     print(cleaned_field_name)
   } else {
@@ -289,34 +311,80 @@ for (df_name in names(xlsx_data)) {
 
 
 
+########################################
+###### Fix FIELD_NAME_Year Creation ######
+########################################
 
-
-#### Create FieldNAME Year column
-for (df_name in names(xlsx_data)) {
-  # Create 'FIELD_NAME_Year' column by concatenating 'year' and 'FIELD_NAME'
-  xlsx_data[[df_name]]$FIELD_NAME_Year <- paste(xlsx_data[[df_name]]$year, xlsx_data[[df_name]]$FIELD_NAME, sep = "_")
-  
-  # Print the updated column names
-  print(colnames(xlsx_data[[df_name]]))
+# First, identify and remove non-dataframe elements
+to_remove <- sapply(xlsx_data, function(x) !is.data.frame(x) || nrow(x) == 0)
+if (any(to_remove)) {
+  cat("Removing the following invalid elements:\n")
+  print(names(xlsx_data)[to_remove])
+  xlsx_data <- xlsx_data[!to_remove]
 }
-xlsx_data$AllFields2015Summary_v2022_03_24$FIELD_NAME_Year
+
+# Now safely create FIELD_NAME_Year column
+for (df_name in names(xlsx_data)) {
+  # Standardize column names first (note the tildes in some files)
+  colnames(xlsx_data[[df_name]]) <- gsub("^~", "", colnames(xlsx_data[[df_name]]))
+  
+  # Create the new column
+  xlsx_data[[df_name]] <- xlsx_data[[df_name]] %>%
+    mutate(FIELD_NAME_Year = paste(year, FIELD_NAME, sep = "_"))
+  
+  # Print verification
+  cat("\nCreated FIELD_NAME_Year in", df_name, "- Sample values:\n")
+  print(head(xlsx_data[[df_name]]$FIELD_NAME_Year))
+}
+
+# Optional: Check which files were processed
+cat("\nSuccessfully processed files:\n")
+print(names(xlsx_data))
+
+
+
 
 #### Create FieldNAME Year column
 for (df_name in names(xlsx_data)) {
   # Create 'FIELD_NAME_Year' column by concatenating 'year' and 'FIELD_NAME'
   xlsx_data[[df_name]]$FIELD_NAME_Year <- paste(xlsx_data[[df_name]]$year, xlsx_data[[df_name]]$FIELD_NAME, sep = "_")
-  
   # Print the updated column names
   print(colnames(xlsx_data[[df_name]]))
-  
   # Print the 'FIELD_NAME_Year' column for each data frame
   cat("\nFIELD_NAME_Year column for", df_name, ":\n")
   print(xlsx_data[[df_name]]$FIELD_NAME_Year)
 }
 
-names(xlsx_data)
-#check the field_data 
-#check the data with the 
+# Combine all data frames in the list into one
+HDIsbellCombined <- do.call(rbind, xlsx_data)
+
+unique(HDIsbellCombined$FIELD_NAME)
 
 
+# ==========================
+# ARVA DATA PROCESSING
+# ==========================
 
+
+# ==========================
+# DWMRU DATA PROCESSING
+# ==========================
+
+
+# ==========================
+# MATT MORRIS DATA PROCESSING
+# ==========================
+
+# ==========================
+# SULLIVAN DATA PROCESSING
+# ==========================
+
+
+# ==========================
+# SCOTT MATTHEWS DATA PROCESSING
+# ==========================
+
+
+# ================================
+# -------- UNILEVER---------------
+# ================================

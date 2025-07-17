@@ -334,11 +334,13 @@ cat("Shapefile saved to:", output_2024, "\n")
 #  UNILEVER
 # ----------------------------
 # Define the file path for the Unilever shapefile
-shapefile_unilever_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Unilever/ShapefileRiceFieldsLastUpdate_clippedbyisbellpolygons/UnileverFS_diff_ISbell_polygons.shp"
+shapefile_unilever_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/Unilever/ShapefileRiceFieldsLastUpdate_clippedbyisbellpolygons_2324/UnileverFS_diff_ISbell_polygons_2324.shp"
 unilever_shp <- st_read(shapefile_unilever_path)%>% select(-c( OID_, FolderPath, SymbolID, 
                                                                AltMode, Base, Clamped,,Extruded ,
                                                                Snippet ,PopupInfo, Shape_Leng, 
-                                                               Shape_Area, Field_Area, Farm, Rotation, Years_Rice))
+                                                               Shape_Area, Field_Area, Farm, Rotation, Years_Rice,
+                                                               descriptio, timestamp, begin, end, altitudeMo, 
+                                                               tessellate, extrude, visibility, drawOrder, icon,layer, path))
 
 # Replace the values in the 'Field' column based on the given rules
 unilever_shp <- unilever_shp %>%
@@ -373,6 +375,19 @@ unilever_shp <- unilever_shp %>%
     FIELD_NAME == "T18M-Farm 5" ~ "T18M_Farm_05",
     FIELD_NAME == "T19M-Farm 5" ~ "T19M_Farm_05",
     FIELD_NAME == "Town Square-Farm 6" ~ "Town_Square_Farm_06",
+    FIELD_NAME == "Hartley 2" ~ "Hartley_2",
+    FIELD_NAME == "EM-17" ~ "EM_17",
+    FIELD_NAME == "EM-9E" ~ "EM_9E",
+    FIELD_NAME == "Pond North" ~ "Pond_North",
+    FIELD_NAME == "Pond South" ~ "Pond_South",
+    FIELD_NAME == "South 0" ~ "South_0",
+    FIELD_NAME == "North 0" ~ "North_0",
+    FIELD_NAME == "EM-12" ~ "EM_12",
+    FIELD_NAME == "EM-10" ~ "EM_10",
+    FIELD_NAME == "Schafer SE" ~ "Schafer_SE",
+    FIELD_NAME == "4 East" ~ "4_East",
+    FIELD_NAME == "SW Pond" ~ "SW_Pond",
+    FIELD_NAME == "Field 2" ~ "Field_2",
     TRUE ~ as.character(FIELD_NAME)  # Keep other values unchanged
   ))
 
@@ -525,17 +540,18 @@ isbellshp <- isbellshp %>%
     FIELD_NAME == "Hudson's" ~ "Hudsons",
     # New Field Name Mappings
     FIELD_NAME %in% c("Bransford Est", "Bransford East", "East Bransford", "East Bransfo") ~ "Bransford_Est",
-    FIELD_NAME %in% c("Carr North", "Top Carr") ~ "Carr_North",
+    FIELD_NAME %in% c("Carr North") ~ "Carr_North",
     FIELD_NAME == "Carr South" ~ "Carr_South",
     FIELD_NAME %in% c( "Cattlet 1", "Cattlet Top", "catlett top") ~ "Cattlet_01",
     FIELD_NAME %in% c( "Cattlet 2", "Cattlet Bott", "cattlet bottom", "Cattlet Bottom") ~ "Cattlet_02",
     FIELD_NAME == "Cattlet 2" ~ "Cattlet_02",
     FIELD_NAME == "Cotton Patch" ~ "Cotton_Patch",
-    FIELD_NAME %in% c("East Harvey", "Top Harvey") ~ "East_Harvey",
+    #FIELD_NAME %in% c("East Harvey", "Top Harvey") ~ "East_Harvey",
     FIELD_NAME == "East Harvey" ~ "East_Harvey",
     FIELD_NAME %in% c("East Joe T", "Joe T East") ~ "East_Joe_T",
     FIELD_NAME %in% c("Experimental Plot", "Experiment")  ~ "Experiment",
-    FIELD_NAME %in% c("Flat", "Pop's Flat", "pops flat", "Pops Flat") ~ "Flat",
+    FIELD_NAME %in% c("Flat") ~ "Flat",
+    FIELD_NAME %in% c( "Pop's Flat", "pops flat", "Pops Flat") ~ "Pops_Flat",
     FIELD_NAME == "Frog 40" ~ "Frog_40",
     FIELD_NAME %in% c("Frog 40 NW", "Frog 40  NW") ~ "Frog_40_NW",
     FIELD_NAME == "Haley" ~ "Haley",
@@ -593,6 +609,7 @@ isbell_data_2015_shp_2015  <- st_as_sf(matched_2015)
 isbell_data_2015_shp_2015  <- st_zm(isbell_data_2015_shp_2015)
 st_write(isbell_data_2015_shp_2015 , output_2015, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2015, "\n")
+
 
 #------------2016#------------
 matched_2016 <- inner_join(isbell_2016, isbellshp, by = "FIELD_NAME")
@@ -711,6 +728,8 @@ PDHD2015 <- rbind(arvamatched_2015, isbell_data_2015_shp_2015) # Merge the two s
 PDHD2015<-dplyr::left_join(PDHD2015, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2015", "PDHD2015.shp")
 st_write(PDHD2015, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2015$FIELD_NAME[duplicated(PDHD2015$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 
 ### 2016 ##
@@ -718,54 +737,96 @@ PDHD2016 <- rbind(arvamatched_2016, isbell_data_2016_shp_2016) # Merge the two s
 PDHD2016<-dplyr::left_join(PDHD2016, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2016", "PDHD2016.shp")
 st_write(PDHD2016, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2016$FIELD_NAME[duplicated(PDHD2016$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2017 ##
 PDHD2017 <- rbind(arvamatched_2017, dwmru_datashp_2017, isbell_data_2017_shp_2017) # Merge the shapefiles
 PDHD2017<-dplyr::left_join(PDHD2017, combinedPOI, by = "FIELD_NAME")
+PDHD2017 <- PDHD2017 %>%
+  group_by(FIELD_NAME) %>%
+  filter(if (n() > 1 && n_distinct(PDDOY) == 1) {
+    (max(HDDOY, na.rm = TRUE) - min(HDDOY, na.rm = TRUE)) <= 4
+  } else TRUE) %>%
+  slice(1) %>%
+  ungroup()
 output_path <- file.path(base_path, "2017", "PDHD2017.shp")
 st_write(PDHD2017, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2017$FIELD_NAME[duplicated(PDHD2017$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
+
 
 ### 2018 ##
 PDHD2018 <- rbind(arvamatched_2018, dwmru_datashp_2018, isbell_data_2018_shp_2018, unilever_data_shp_2018) # Merge the shapefiles
 PDHD2018<-dplyr::left_join(PDHD2018, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2018", "PDHD2018.shp")
 st_write(PDHD2018, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2018$FIELD_NAME[duplicated(PDHD2018$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2019 ##
 PDHD2019 <- rbind(arvamatched_2019, isbell_data_2019_shp_2019, unilever_data_shp_2019) # Merge the shapefiles
 PDHD2019<-dplyr::left_join(PDHD2019, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2019", "PDHD2019.shp")
 st_write(PDHD2019, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2019$FIELD_NAME[duplicated(PDHD2019$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2020 ##
 PDHD2020 <- rbind(arvamatched_2020, dwmru_datashp_2020, isbell_data_2020_shp_2020, unilever_data_shp_2020) # Merge the shapefiles
 PDHD2020<-dplyr::left_join(PDHD2020, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2020", "PDHD2020.shp")
 st_write(PDHD2020, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2020$FIELD_NAME[duplicated(PDHD2020$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2021 ##
 PDHD2021 <- rbind(arvamatched_2021, dwmru_datashp_2021, isbell_data_2021_shp_2021, unilever_data_shp_2021) # Merge the shapefiles
 PDHD2021<-dplyr::left_join(PDHD2021, combinedPOI, by = "FIELD_NAME")
+PDHD2021 <- PDHD2021 %>%
+  group_by(FIELD_NAME) %>%
+  arrange(HDDOY) %>%
+  filter(!(n() > 1 & n_distinct(PDDOY) == 1 & (max(HDDOY) - min(HDDOY)) <= 4)) %>%
+  ungroup()
 output_path <- file.path(base_path, "2021", "PDHD2021.shp")
 st_write(PDHD2021, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2021$FIELD_NAME[duplicated(PDHD2021$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2022 ##
 PDHD2022 <- rbind(arvamatched_2022, dwmru_datashp_2022, isbell_data_2022_shp_2022, unilever_data_shp_2022) # Merge the shapefiles
 PDHD2022<-dplyr::left_join(PDHD2022, combinedPOI, by = "FIELD_NAME")
+PDHD2022 <- PDHD2022 %>%
+  group_by(FIELD_NAME) %>%
+  mutate(
+    dup_count = n(),
+    pd_match = n_distinct(PDDOY) == 1,
+    hd_range = max(HDDOY, na.rm = TRUE) - min(HDDOY, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  filter(!(dup_count > 1 & pd_match & hd_range <= 1)) %>%  # remove one of the duplicates
+  select(-dup_count, -pd_match, -hd_range)
 output_path <- file.path(base_path, "2022", "PDHD2022.shp")
 st_write(PDHD2022, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2022$FIELD_NAME[duplicated(PDHD2022$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ### 2023 ##
 PDHD2023 <- rbind(arvamatched_2023, dwmru_datashp_2023, isbell_data_2023_shp_2023, sullivan_data_shp_2023) # Merge the shapefiles
 PDHD2023<-dplyr::left_join(PDHD2023, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2023", "PDHD2023.shp")
 st_write(PDHD2023, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2023$FIELD_NAME[duplicated(PDHD2023$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
+
 
 ### 2024 ##
 PDHD2024 <- rbind(arvamatched_2024, dwmru_datashp_2024, isbell_data_2024_shp_2024, matt_morris_datashp_2024) # Merge the shapefiles
 PDHD2024<-dplyr::left_join(PDHD2024, combinedPOI, by = "FIELD_NAME")
 output_path <- file.path(base_path, "2024", "PDHD2024.shp")
 st_write(PDHD2024, output_path, delete_layer = TRUE) # Write the merged shapefile
+dups <- unique(PDHD2024$FIELD_NAME[duplicated(PDHD2024$FIELD_NAME)])
+if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates\n")
 
 ##########
 ###2023#####
@@ -831,10 +892,9 @@ print(filtered_rows)
 # ----------------------------
 # 9. JAVASCRIPT EXPORT
 # ----------------------------
-
-
-#########2015#####################
-##########################################
+#-----------------------
+#2015
+#-----------------------
 for (value in unique(PDHD2015$FIELD_NAME)) {
   cat(paste0("var ", value, " = PDHD2015.filter(ee.Filter.eq('FIELD_NAME', '", value, "'));\n"))
 }
@@ -854,7 +914,9 @@ output_lines <- c(output_lines, "};")
 # Print the complete JavaScript code
 cat(paste(output_lines, collapse = "\n"))
 
-# Meteo
+#---------------------
+# Meteo 2015
+#-----------------------
 output_lines <- c("var meteoResults = {")
 for (i in 1:nrow(PDHD2015)) {
   field_name <- PDHD2015$FIELD_NAME[i]
@@ -865,6 +927,8 @@ for (i in 1:nrow(PDHD2015)) {
 output_lines[length(output_lines)] <- sub(",$", "", output_lines[length(output_lines)])
 output_lines <- c(output_lines, "};")
 cat(paste(output_lines, collapse = "\n"))
+
+
 
 ##########################################
 # 2016
@@ -1040,7 +1104,9 @@ output_lines[length(output_lines)] <- sub(",$", "", output_lines[length(output_l
 output_lines <- c(output_lines, "};")
 cat(paste(output_lines, collapse = "\n"))
 
+#--------------------------------------
 # Meteo
+#--------------------------------------
 output_lines <- c("var meteoResults = {")
 for (i in 1:nrow(PDHD2021)) {
   field_name <- PDHD2021$FIELD_NAME[i]
