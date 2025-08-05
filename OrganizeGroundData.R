@@ -869,14 +869,14 @@ combined_data <- bind_rows(dataframes)
 sum(!is.na(combined_data$HDDOY))
 sum(!is.na(combined_data$PDDOY))
 
-head(sort(combined_data$HDDOY, decreasing = TRUE), 5)
+head(sort(combined_data$PDDOY, decreasing = TRUE), 5)
 subset(combined_data, HDDOY == 360)
 ##### replace the values of 360 by na
 # Replace HD values with NA where HDDOY is 360
-combined_data$HD[combined_data$HDDOY == 360] <- NA
-
-View(combined_data)
-
+combined_data$HDDOY[combined_data$HDDOY > 305] <- NA
+combined_data$PDDOY[combined_data$PDDOY > 180] <- NA
+max(combined_data$HDDOY, na.rm = TRUE)
+max(combined_data$PDDOY, na.rm = TRUE)
 #============================================================================
 #============================================================================
 #============================================================================

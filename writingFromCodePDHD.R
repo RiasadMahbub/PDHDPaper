@@ -41,3 +41,4 @@ cat(sprintf(
   "The planting days range from %d to %d, while the harvest days range from %d to %d.\n",
   summary_stats$Min_PD, summary_stats$Max_PD, summary_stats$Min_HD, summary_stats$Max_HD
 ))
+

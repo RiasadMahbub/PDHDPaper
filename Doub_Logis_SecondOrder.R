@@ -1,257 +1,202 @@
-# Indices to evaluate for EOS optimization: 
-# MLSWI26, IAVI, VARI, RNDVI, NDVI, EVI, kNDVI, ATSAVI, 
-# GDVI, MBWI, TVI, NDWI, TSAVI, LSWI
+# Load necessary libraries if not already loaded
+# library(dplyr)
+# library(purrr)
+# library(ggplot2)
+# library(future)
+# library(progressr)
+# library(minpack.lm) # For nlsLM
 
+# Ensure the 'extract_sos_eos' function and 'calculate_metrics' function
+# are defined and accessible from your previous code.
+# Also ensure 'vi_list_gt20' and 'vi_data_by_field' are prepared as per your script.
 
-##Paper: Evaluating the Consistency of Vegetation Phenological Parameters in the Northern Hemisphere from 1982 to 2015
-### Paper the values have been taken from: Exploring the Use of DSCOVR/EPIC Satellite Observations to Monitor Vegetation Phenology
-# 1. LOAD REQUIRED LIBRARIES
-# ==============================================
-library(dplyr)        # Data manipulation
-library(ggplot2)      # Visualization
-library(lubridate)    # Date handling
-library(minpack.lm)   # Nonlinear least squares fitting
-library(Metrics)      # Model evaluation metrics
-library(pracma)       # Peak detection (for 2nd derivative method)
-library(future.apply) # Parallel processing
-library(progressr)    # Progress tracking
+# Dummy data for demonstration if not already loaded (replace with your actual data)
+# For demonstration purposes, let's assume sos_eos_df and vi_data_by_field exist
+# If running this independently, you would need to run the preceding parts of your script
+# to generate these data structures.
+# For example:
+# source("your_phenology_script.R") # Assuming your previous code is in this file
 
-# --- Double logistic function
-double_logistic <- function(t, v1, v2, m1, n1, m2, n2) {
-  v1 + v2 * (1 / (1 + exp(-m1 * (t - n1))) - 1 / (1 + exp(-m2 * (t - n2))))
-}
-
-# --- Derivative of double logistic
-double_logistic_derivative <- function(t, v2, m1, n1, m2, n2) {
-  term1 <- (exp(-m1 * (t - n1)) * m1) / ((1 + exp(-m1 * (t - n1)))^2)
-  term2 <- (exp(-m2 * (t - n2)) * m2) / ((1 + exp(-m2 * (t - n2)))^2)
-  v2 * (term1 - term2)
-}
-
-# --- Fit function returning SOS
-extract_sos_double_logistic <- function(df, vi_column = "NDVI", date_column = "Date") {
-  df <- df[!is.na(df[[vi_column]]), ]
-  if (nrow(df) < 10) return(NA)
-  df$DOY <- yday(df[[date_column]])
-  start_vals <- list(
-    v1 = min(df[[vi_column]], na.rm = TRUE),
-    v2 = max(df[[vi_column]], na.rm = TRUE) - min(df[[vi_column]], na.rm = TRUE),
-    m1 = 0.1, n1 = 100,
-    m2 = 0.1, n2 = 250
-  )
-  fit <- try(nlsLM(df[[vi_column]] ~ double_logistic(DOY, v1, v2, m1, n1, m2, n2),
-                   data = df, start = start_vals, control = nls.lm.control(maxiter = 500)), silent = TRUE)
-  if (inherits(fit, "try-error")) return(NA)
-  
-  params <- coef(fit)
-  doy_seq <- seq(min(df$DOY), max(df$DOY), by = 1)
-  derivative_vals <- double_logistic_derivative(
-    t = doy_seq,
-    v2 = params["v2"],
-    m1 = params["m1"], n1 = params["n1"],
-    m2 = params["m2"], n2 = params["n2"]
-  )
-  
-  sos_doy <- doy_seq[which.max(derivative_vals)]
-  return(sos_doy)
-}
-
-# --- Apply to all data
-sos_double_results <- sapply(vi_list_gt20, function(df) extract_sos_double_logistic(df, vi_column = "NDVI", date_column = "Date"))
-obs_pddoy <- sapply(vi_list_gt20, function(df) df$PDDOY[1])
-valid <- !is.na(sos_double_results) & !is.na(obs_pddoy)
-
-# --- Metrics
-rmse_val <- rmse(obs_pddoy[valid], sos_double_results[valid])
-mae_val  <- mae(obs_pddoy[valid], sos_double_results[valid])
-r2_val   <- summary(lm(sos_double_results[valid] ~ obs_pddoy[valid]))$r.squared
-bias_val <- mean(sos_double_results[valid] - obs_pddoy[valid])
-
-# --- Output metrics
-cat("Double Logistic Method Results:\n")
-cat("RMSE:", rmse_val, "\n")
-cat("MAE:", mae_val, "\n")
-cat("R²:", r2_val, "\n")
-cat("Bias:", bias_val, "\n")
-
-# --- Plot: Observed vs Predicted
-sos_df <- data.frame(
-  observed_SOS = obs_pddoy[valid],
-  predicted_SOS = sos_double_results[valid]
-)
-
-ggplot(sos_df, aes(x = observed_SOS, y = predicted_SOS)) +
-  geom_point(color = "darkgreen") +
-  geom_smooth(method = "lm", col = "red", linetype = "dashed") +
-  annotate("text",
-           x = max(sos_df$observed_SOS),
-           y = min(sos_df$predicted_SOS),
-           label = paste0("R² = ", round(r2_val, 3),
-                          "\nRMSE = ", round(rmse_val, 2),
-                          "\nMAE = ", round(mae_val, 2)),
-           hjust = 1, vjust = 0, size = 4, color = "blue") +
-  labs(
-    title = "Observed vs Predicted SOS (Double Logistic)",
-    x = "Observed Planting Date (DOY)",
-    y = "Predicted SOS (DOY)"
-  ) +
-  theme_minimal(base_size = 14)
-
-
-
-#=======================================================================
-#DOUBLE LOGISTICS WITH SECOND ORDER DERIVATIVE
-#=======================================================================
-extract_phenology_points <- function(df, id = NULL, plot_path = NULL) {
-  library(ggplot2)
-  library(lubridate)
-  library(minpack.lm)
-  library(pracma)
-  
-  # Ensure proper Date and DOY
-  df$Date <- as.POSIXct(df$Date, tz = "UTC")
-  df$DOY <- yday(df$Date)
-  df <- df[order(df$DOY), ]
-  doy <- df$DOY
-  ndvi <- df$IAVI
-  t <- doy
-  y <- ndvi
-  fit_data <- data.frame(t = t, y = y)
-  
-  # Double logistic function
-  double_logistic <- function(t, a, b, c, d, e, f) {
-    a + b * (1 / (1 + exp(c * (t - d))) + 1 / (1 + exp(e * (t - f))))
+# Re-define calculate_metrics if not in current environment
+calculate_metrics <- function(observed, predicted) {
+  valid_df <- na.omit(data.frame(observed, predicted))
+  if (nrow(valid_df) == 0) {
+    return(list(RMSE = NA, MAE = NA, R2 = NA, Bias = NA))
   }
-  
-  # Starting parameters
-  start_params <- list(
-    a = min(y),
-    b = max(y) - min(y),
-    c = -0.05,
-    d = 100,
-    e = 0.05,
-    f = 250
+  list(
+    RMSE = round(sqrt(mean((valid_df$observed - valid_df$predicted)^2)), 2),
+    MAE = round(mean(abs(valid_df$observed - valid_df$predicted)), 2),
+    R2 = round(summary(lm(predicted ~ observed, data = valid_df))$r.squared, 2),
+    Bias = round(mean(valid_df$predicted - valid_df$observed), 2) # Corrected bias calculation
   )
-  
-  tryCatch({
-    # Fit model
-    fit <- nlsLM(y ~ double_logistic(t, a, b, c, d, e, f),
-                 data = fit_data,
-                 start = start_params,
-                 control = nls.lm.control(maxiter = 500))
-    
-    # Predict NDVI for each DOY
-    t_seq <- seq(1, 365, by = 1)
-    pred <- predict(fit, newdata = data.frame(t = t_seq))
-    
-    # 2nd derivative
-    second_deriv <- diff(pred, differences = 2)
-    t_deriv <- t_seq[-c(1, length(t_seq))]
-    
-    # Identify peaks
-    peaks <- findpeaks(second_deriv, sortstr = TRUE)
-    peak_positions <- t_deriv[peaks[, 2]]
-    peak_values <- peaks[, 1]
-    peak_info <- data.frame(DOY = peak_positions, Value = peak_values)
-    first_half <- peak_info[peak_info$DOY <= 180, ]
-    second_half <- peak_info[peak_info$DOY > 180, ]
-    
-    # Phenology points
-    sos <- first_half$DOY[which.max(first_half$Value)]
-    maturity <- first_half$DOY[order(first_half$Value, decreasing = TRUE)[2]]
-    senescence <- second_half$DOY[order(second_half$Value, decreasing = TRUE)[2]]
-    eos <- second_half$DOY[which.max(second_half$Value)]
-    
-    # Normalize 2nd derivative for plotting
-    second_deriv_scaled <- scales::rescale(second_deriv, to = range(pred, na.rm = TRUE))
-    
-    # Create dataframes for plotting
-    pred_df <- data.frame(DOY = t_seq, NDVI = pred)
-    deriv_df <- data.frame(DOY = t_deriv, SecondDerivative = second_deriv_scaled)
-    
-    # Plot
-    p <- ggplot() +
-      geom_point(data = df, aes(x = DOY, y = NDVI), color = "black", alpha = 0.6) +
-      geom_line(data = pred_df, aes(x = DOY, y = NDVI), color = "blue", size = 1) +
-      geom_line(data = deriv_df, aes(x = DOY, y = SecondDerivative), color = "purple", linetype = "dotted") +
-      geom_vline(xintercept = c(sos, maturity, senescence, eos),
-                 linetype = "dashed",
-                 color = c("green", "darkgreen", "orange", "red")) +
-      annotate("text", x = c(sos, maturity, senescence, eos),
-               y = max(df$NDVI, na.rm = TRUE),
-               label = c("SOS", "Maturity", "Senescence", "EOS"),
-               vjust = -1, hjust = 0.5) +
-      labs(title = paste("NDVI Fit + Phenology -", id),
-           x = "Day of Year (DOY)", y = "NDVI") +
-      theme_minimal()
-    
-    if (!is.null(plot_path)) {
-      ggsave(file.path(plot_path, paste0("Phenology_", id, ".jpg")),
-             plot = p, width = 7, height = 5, dpi = 300)
-    }
-    
-    return(data.frame(ID = id,
-                      SOS = sos,
-                      Maturity = maturity,
-                      Senescence = senescence,
-                      EOS = eos))
-    
-  }, error = function(e) {
-    return(data.frame(ID = id, SOS = NA, Maturity = NA, Senescence = NA, EOS = NA))
-  })
 }
 
-#First, extract the field names from the filenames
-field_names <- gsub("_\\d{4}\\.csv$", "", basename(vi_csv_files_gt20))
+# Ensure sos_eos_df and vi_data_by_field are available and correctly structured
+# For this script to run, 'sos_eos_df' must contain 'SOS', 'observed_SOS', 'Field_Year'.
+# 'vi_data_by_field' must be a named list of data frames, where names are 'Field_Year'
+# and each data frame contains 'cumulative_gdd_from_pddoy' and 'gdd'.
 
+# --- K-Fold Cross-Validation Setup ---
+n_runs <- 100 # Number of runs
+train_ratio <- 0.6
+val_ratio <- 0.2
+test_ratio <- 0.2
 
+# Store results for each run
+all_train_predictions <- list()
+all_val_predictions <- list()
+all_test_predictions_by_field <- list() # To store test predictions for averaging later
 
-# Set up parallel plan (adjust workers as needed)
-plan(multisession, workers = 4)
+# Set up parallel processing for the runs (optional, but good for n_runs=100)
+# plan(multisession, workers = 4) # Adjust workers as needed
+# handlers(global = TRUE)
+# handlers("txtprogressbar")
 
-# Run in parallel without plotting
-results <- future_lapply(seq_along(vi_list_gt20), function(i) {
-  extract_phenology_points(vi_list_gt20[[i]],
-                           id = field_names[i],
-                           plot = FALSE)  # Disable plotting
-})
+cat("Starting K-fold cross-validation...\n")
 
-# Combine results
-phenology_df <- do.call(rbind, results)
-phenology_df
-# Create a joint mask where both variables are not NA
-valid_mask <- !is.na(obs_pddoy) & !is.na(phenology_df$SOS)
+# Use with_progress for a progress bar if parallel processing is enabled
+# with_progress({
+#   p <- progressor(along = 1:n_runs)
 
-# Apply the mask to both vectors
-obs_valid <- obs_pddoy[valid_mask]
-sos_valid <- phenology_df$SOS[valid_mask]
-#------------------------------------------------------------------
-#SUMMARY TABLE MODEL COMPARISON
-#------------------------------------------------------------------
-rmse_val2 <- round(rmse(obs_valid, sos_valid), 2)
-mae_val2  <- round(mae(obs_valid, sos_valid), 2)
-r2_val2   <- round(summary(lm(sos_valid ~ obs_valid))$r.squared, 2)
-bias_val2 <- round(mean(sos_valid - obs_valid), 2)
+for (i in 1:n_runs) {
+  # p(sprintf("Running iteration %d/%d", i, n_runs)) # Update progress bar
+  
+  # 1. Split Data
+  # Ensure reproducibility for each split if needed, or comment out for true randomness
+  # set.seed(i)
+  
+  # Get unique Field_Years for splitting
+  unique_fields <- unique(sos_eos_df$Field_Year)
+  n_fields <- length(unique_fields)
+  
+  # Randomly sample indices for each set
+  train_indices <- sample(n_fields, size = floor(n_fields * train_ratio))
+  remaining_indices <- setdiff(1:n_fields, train_indices)
+  val_indices <- sample(remaining_indices, size = floor(n_fields * val_ratio))
+  test_indices <- setdiff(remaining_indices, val_indices)
+  
+  # Get the actual Field_Year names for each set
+  train_fields <- unique_fields[train_indices]
+  val_fields <- unique_fields[val_indices]
+  test_fields <- unique_fields[test_indices]
+  
+  # Subset sos_eos_df for each set
+  train_df_run <- sos_eos_df %>% dplyr::filter(Field_Year %in% train_fields)
+  val_df_run <- sos_eos_df %>% dplyr::filter(Field_Year %in% val_fields)
+  test_df_run <- sos_eos_df %>% dplyr::filter(Field_Year %in% test_fields)
+  
+  # 2. Training Phase: Calculate mean GDD lag from training data
+  # Filter vi_data_by_field to only include training fields
+  train_vi_data_for_lag <- vi_data_by_field[train_fields]
+  
+  # Calculate gdd_lags for the training set
+  gdd_lags_train_list <- map(train_vi_data_for_lag, ~ calculate_gdd_lag_precise(.x))
+  gdd_lags_train <- unlist(gdd_lags_train_list)
+  
+  # Calculate the mean lag from the training set, handling NAs
+  current_mean_lag <- mean(gdd_lags_train, na.rm = TRUE)
+  
+  # Store the mean lag for this run (optional, but good for debugging)
+  # This is the "lag of 100 runs of training" part
+  # We will use this mean lag for prediction
+  
+  # Predict SOSPD2 for training set
+  train_df_run <- train_df_run %>%
+    dplyr::mutate(Predicted_SOSPD2 = SOS - current_mean_lag,
+                  Run_ID = i)
+  all_train_predictions[[i]] <- train_df_run
+  
+  # 3. Validation Phase: Apply mean lag to validation data
+  val_df_run <- val_df_run %>%
+    dplyr::mutate(Predicted_SOSPD2 = SOS - current_mean_lag,
+                  Run_ID = i)
+  all_val_predictions[[i]] <- val_df_run
+  
+  # 4. Testing Phase: Apply mean lag to testing data
+  test_df_run <- test_df_run %>%
+    dplyr::mutate(Predicted_SOSPD2 = SOS - current_mean_lag,
+                  Run_ID = i)
+  all_test_predictions_by_field[[i]] <- test_df_run
+}
+# }) # End with_progress
 
-double_logistic_second_summary <- data.frame(
-  Model = "Double Logistic - Second Derivative",
-  RMSE  = rmse_val2,
-  MAE   = mae_val2,
-  R2    = r2_val2,
-  Bias  = bias_val2
+cat("K-fold cross-validation complete. Aggregating results...\n")
+
+# --- Aggregate Results ---
+
+# Combine all training predictions
+final_train_predictions_df <- do.call(rbind, all_train_predictions)
+
+# Combine all validation predictions
+final_val_predictions_df <- do.call(rbind, all_val_predictions)
+
+# Combine all test predictions and calculate the mean prediction per Field_Year
+# A field might appear in the test set multiple times across 100 runs
+final_test_predictions_df <- do.call(rbind, all_test_predictions_by_field) %>%
+  dplyr::group_by(Field_Year) %>%
+  dplyr::summarise(Mean_Predicted_SOSPD2_test = mean(Predicted_SOSPD2, na.rm = TRUE),
+                   Observed_SOS = dplyr::first(observed_SOS)) # Get the observed SOS for evaluation
+
+# --- Performance Evaluation ---
+
+cat("\n--- Performance Evaluation ---\n")
+
+# Training Set Performance (overall across all training instances)
+train_metrics_overall <- calculate_metrics(
+  final_train_predictions_df$observed_SOS,
+  final_train_predictions_df$Predicted_SOSPD2
 )
+cat("Training Set Metrics (across all runs):\n")
+print(train_metrics_overall)
 
-dtmdldeines_summary_df <- bind_rows(dtmdldeines_summary_df, double_logistic_second_summary)
-dtmdldeines_summary_df
+# Validation Set Performance (overall across all validation instances)
+val_metrics_overall <- calculate_metrics(
+  final_val_predictions_df$observed_SOS,
+  final_val_predictions_df$Predicted_SOSPD2
+)
+cat("\nValidation Set Metrics (across all runs):\n")
+print(val_metrics_overall)
 
+# Testing Set Performance (using the mean prediction for each field in test sets)
+test_metrics_overall <- calculate_metrics(
+  final_test_predictions_df$Observed_SOS,
+  final_test_predictions_df$Mean_Predicted_SOSPD2_test
+)
+cat("\nTesting Set Metrics (mean prediction per field across runs):\n")
+print(test_metrics_overall)
 
-#=============================================================
-#Save the fitting figure 
-#=============================================================
-# Run in parallel
-results <- future_lapply(seq_along(vi_list_gt20), function(i) {
-  extract_phenology_points(vi_list_gt20[[i]],
-                           id = field_names[i],
-                           plot_path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/DoubleLogistics/Second")
-})
+# --- Visualization of Final Testing Results ---
 
+cat("\nGenerating plot for final testing results...\n")
+
+# Plot for the mean test predictions
+ggplot(final_test_predictions_df, aes(x = Observed_SOS, y = Mean_Predicted_SOSPD2_test)) +
+  geom_point(color = "darkgreen", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  geom_smooth(method = "lm", color = "darkred") +
+  annotate("text",
+           x = quantile(final_test_predictions_df$Observed_SOS, 0.1, na.rm = TRUE),
+           y = quantile(final_test_predictions_df$Mean_Predicted_SOSPD2_test, 0.9, na.rm = TRUE),
+           label = sprintf("RMSE: %.1f\nMAE: %.1f\nR²: %.2f",
+                           test_metrics_overall$RMSE, test_metrics_overall$MAE, test_metrics_overall$R2)) +
+  labs(x = "Observed SOS (DOY)", y = "Predicted SOS (DOY) [Mean of 100 Runs]") +
+  ggtitle("K-Fold Cross-Validation: Mean Predicted SOS for Test Set") +
+  theme_bw()
+
+# You can also visualize training and validation results similarly if needed
+# For example:
+# ggplot(final_train_predictions_df, aes(x = observed_SOS, y = Predicted_SOSPD2)) +
+#   geom_point(color = "blue", alpha = 0.6) +
+#   geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+#   geom_smooth(method = "lm", color = "red") +
+#   labs(x = "Observed SOS (DOY)", y = "Predicted SOS (DOY) [Training]") +
+#   ggtitle("K-Fold Cross-Validation: Training Set Predictions") +
+#   theme_bw()
+
+# ggplot(final_val_predictions_df, aes(x = observed_SOS, y = Predicted_SOSPD2)) +
+#   geom_point(color = "purple", alpha = 0.6) +
+#   geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+#   geom_smooth(method = "lm", color = "orange") +
+#   labs(x = "Observed SOS (DOY)", y = "Predicted SOS (DOY) [Validation]") +
+#   ggtitle("K-Fold Cross-Validation: Validation Set Predictions") +
+#   theme_bw()

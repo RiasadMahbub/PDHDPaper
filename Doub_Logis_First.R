@@ -394,7 +394,7 @@ library(purrr)
 
 # Function to estimate days after SOS to reach 892 cumulative GDD
 # Function to compute lag between 892 GDD DOY and SOS GDD "start" DOY
-calculate_gdd_lag_precise <- function(df, gdd_target = 892) {
+calculate_gdd_lag_precise <- function(df, gdd_target = 1063.499) {
   # Remove rows where cumulative GDD is NA (before SOS/PDDOY)
   df_valid <- df[!is.na(df$cumulative_gdd_from_pddoy), ]
   
@@ -488,7 +488,7 @@ print(sos_eos_with_lag)
 
 
 sos_eos_with_lag$SOSPD2<-sos_eos_with_lag$SOS-sos_eos_with_lag$Lag_Days
-
+sos_eos_with_lag$lagobserved <-sos_eos_with_lag$SOS-sos_eos_with_lag$observed_SOS
 # Calculate metrics for SOS and EOS
 sos_metrics2 <- calculate_metrics(sos_eos_with_lag$observed_SOS, sos_eos_with_lag$SOSPD2)
 
@@ -527,7 +527,6 @@ required_cols <- c("doy", "cumulative_gdd_from_pddoy", "gdd")
 # Loop through each valid Field_Year
 for (field_year in valid_ids) {
   current_vi_data <- vi_data_by_field[[field_year]]
-  
   # Check if required columns exist
   if (!all(required_cols %in% names(current_vi_data))) {
     warning(paste("Missing columns in:", field_year))
@@ -593,8 +592,14 @@ ggsave("Observed_vs_Predicted_SOS_DoubleLogistic.png", width = 7, height = 6, dp
 cat(sprintf("Model performance:\n  RMSE: %.2f\n  MAE: %.2f\n  R²: %.2f\n", 
             rmse_value, mae_value, r2_value))
 
-
-
+sos_eos_with_lag$lagobserved <-sos_eos_with_lag$SOS-sos_eos_with_lag$observed_SOS
+ggplot(sos_eos_with_lag, aes(x = lagobserved, y = Lag_Days)) +
+  geom_point(color = "blue", size = 3) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +  # 1:1 line
+  geom_smooth(method = "lm", color = "red", se = TRUE) +  # Regression line
+  labs(x = "Observed SOS (PDDOY)", y = "Predicted SOS (from double logistic)", 
+       title = "Observed vs. Predicted Start of Season (SOS)") +
+  theme_minimal()
 
 
 #------------------------------------------------------------------

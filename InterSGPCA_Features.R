@@ -79,13 +79,7 @@ library(pbapply)      # Progress bar apply functions
 library(furrr)        # Parallel processing
 library(data.table)   # Fast data operations
 plan(multisession)    # Use available cores for parallel processing
-library(furrr)
-library(furrr)
 library(purrr)
-library(parallel)
-library(furrr)
-library(purrr)
-library(parallel)# Set up parallel processing
 library(parallel)
 library(pbapply)
 #========================================
@@ -248,7 +242,17 @@ calculate_gdd_cumulative <- function(df) {
   return(df)
 }
 
-
+convert_kelvin_to_celsius <- function(df, col_name = "SoilTMP0_10cm_inst") {
+  if (col_name %in% names(df)) {
+    # Check if median value suggests the data is in Kelvin
+    if (median(df[[col_name]], na.rm = TRUE) > 200) {
+      df[[col_name]] <- df[[col_name]] - 273.15
+    }
+  } else {
+    warning(paste("Column", col_name, "not found in data frame"))
+  }
+  return(df)
+}
 
 
 # ==============================================
@@ -302,7 +306,7 @@ vi_info_summary <- vi_info %>%
 # ANALYZE FILES WITH FEW OBSERVATIONS (<20 ROWS)
 # ==============================================
 data_filtered_l20 <- vi_info_summary %>%
-  dplyr::filter(nrows < 10) %>%
+  dplyr::filter(nrows < 15) %>%
   dplyr::mutate(year = substr(file_name, nchar(file_name) - 7, nchar(file_name) - 4)) %>%
   dplyr::group_by(year) %>%
   dplyr::summarise(frequency = n())
@@ -317,7 +321,7 @@ write.csv(data_filtered_l20,
 # ==============================================
 # Files with >20 observations
 data_filtered_g20 <- vi_info_summary %>%
-  dplyr::filter(nrows > 20) %>%
+  dplyr::filter(nrows > 15) %>%
   dplyr::mutate(year = substr(file_name, nchar(file_name) - 7, nchar(file_name) - 4)) %>%
   dplyr::group_by(year) %>%
   dplyr::summarise(frequency = n())
@@ -341,7 +345,7 @@ print(total_sum)
 
 # Get list of filenames that have more than 20 rows
 valid_files_gt20 <- vi_info_summary %>%
-  dplyr::filter(nrows > 20) %>%
+  dplyr::filter(nrows > 15) %>%
   pull(file_name)
 
 vi_list_gt20 <- vi_list[basename(vi_csv_files) %in% valid_files_gt20]
@@ -363,16 +367,62 @@ clusterExport(cl, c("drop_columns", "convert_unix_time", "sort_by_date",
                     "interpolate_missing_values", "apply_sg_filter",
                     "add_siteyeardate", "cols_to_drop", "%>%", "left_join", "na.approx"))
 
-# Apply the negative value replacement
+# Apply the negatiDOY# Apply the negative value replacement
 vi_list_gt20 <- pblapply(vi_list_gt20, replace_negative_vi, cl = cl)
 
 # 1. Convert Unix to date format (parallel)
 vi_list_gt20 <- pblapply(vi_list_gt20, convert_unix_time, cl = cl)
 meteo_list <- pblapply(meteo_list, convert_unix_time_meteo, cl = cl)
 
+condition1 <- function(df) {
+  df$DOY <- yday(df$Date)
+  mask <- df$DOY < 100 & df$kNDVI > 0.2
+  df$kNDVI[mask] <- NA
+  df$NDVI[mask] <- NA
+  df$GDVI[mask] <- NA
+  df$IAVI[mask] <- NA
+  df$VARI[mask] <- NA
+  return(df)
+}
+condition2 <- function(df) {
+  diffs <- abs(diff(df$kNDVI))
+  idx <- which(diffs > 0.25) + 1  # shift index to the second of the pair
+  df$kNDVI[idx] <- NA
+  return(df)
+}
+condition3 <- function(df) {
+  k <- df$kNDVI
+  for (i in 2:(length(k) - 1)) {
+    if (!is.na(k[i - 1]) && !is.na(k[i]) && !is.na(k[i + 1])) {
+      if ((k[i] - k[i - 1]) <= -0.2 && (k[i + 1] - k[i]) >= 0.2) {
+        df$kNDVI[i] <- NA
+        df$kNDVI[i + 1] <- NA
+      }
+    }
+  }
+  return(df)
+}
+vi_list_gt20 <- pblapply(vi_list_gt20, condition1)
+vi_list_gt20 <- pblapply(vi_list_gt20, condition2)
+vi_list_gt20 <- pblapply(vi_list_gt20, condition3)
+
 # 2. Sort by date (parallel)
 vi_list_gt20 <- pblapply(vi_list_gt20, sort_by_date, cl = cl)
 meteo_list <- pblapply(meteo_list, sort_by_date, cl = cl)
+
+
+# Get number of columns for each data frame in the list
+column_lengths <- sapply(vi_list_gt20, ncol)
+print(column_lengths)
+which(column_lengths == 156)
+which(column_lengths == 157)
+# Find an example with 157 columns
+df_157 <- vi_list_gt20[[which(column_lengths == 157)[1]]]
+# Find an example with 156 columns
+df_156 <- vi_list_gt20[[which(column_lengths == 156)[1]]]
+# Compare column names
+setdiff(names(df_157), names(df_156))
+
 
 # 3. Filter to growing season (parallel)
 #vi_list_gt20 <- pblapply(vi_list_gt20, filter_march_to_october, cl = cl)
@@ -382,6 +432,7 @@ vi_list_gt20 <- pblapply(vi_list_gt20, make_daily, cl = cl)
 meteo_list <- pblapply(meteo_list, make_daily, cl = cl)
 
 
+
 # 5. Interpolate missing values
 vi_list_gt20 <- pblapply(vi_list_gt20, interpolate_missing_values, cl = cl)
 meteo_list <- pblapply(meteo_list, interpolate_missing_values, cl = cl)
@@ -389,25 +440,35 @@ meteo_list <- pblapply(meteo_list, interpolate_missing_values, cl = cl)
 # With progress bar and parallel processing
 vi_list_gt20 <- pblapply(vi_list_gt20, apply_sg_filter, cl = cl)
 
+#convert meteo_list of soil temp from kelvin to celsius
+meteo_list <- lapply(meteo_list, convert_kelvin_to_celsius)
+
 # Clean up
+#closeAllConnections()
 stopCluster(cl)
 plan(sequential)  # Return to sequential processing
-
+vi_list_gt20[[401]]$DOY
+vi_list_gt20[[401]]$kNDVI
+#plot(vi_list_gt20[[401]]$DOY, vi_list_gt20[[401]]$kNDVI)
 # ==============================================
 # VISUALIZATION EXAMPLE
 # ==============================================
 plot(vi_list_gt20[[1]]$Date, vi_list_gt20[[1]]$kNDVI)
 plot(meteo_list[[1]]$Date, meteo_list[[1]]$Ec)
 
-# Replace HDDOY values of 360 with NA in all vi_list_gt20 dataframes
 vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
   if ("HDDOY" %in% names(df)) {
-    df$HDDOY[df$HDDOY == 360] <- NA
+    df$HDDOY[df$HDDOY > 350] <- NA
   }
   return(df)
 })
-
-
+get_max_HDDOY <- function(vi_list) {
+  hddoy_values <- sapply(vi_list, function(df) {
+    if ("HDDOY" %in% names(df)) max(df$HDDOY, na.rm = TRUE) else NA
+  })
+  print(max(hddoy_values, na.rm = TRUE))
+}
+get_max_HDDOY(vi_list_gt20)
 #-------------------------------------------------------
 #Calculate GDD of each dataframe 
 vi_list_gt20[[1]]$Date
@@ -416,26 +477,22 @@ plot(meteo_list[[1]]$Date, meteo_list[[1]]$cumulative_gdd)
 plot(meteo_list[[1]]$Date, meteo_list[[1]]$gdd)
 
 
-# 1. Function to gap-fill NA Field_Year values per dataframe
-fill_field_year <- function(df) {
-  # Get all unique non-NA Field_Year values in this dataframe
-  valid_years <- na.omit(unique(df$Field_Year))
+# Function to fill NA FIELD_NAME values per dataframe
+fill_field_name <- function(df) {
+  valid_names <- na.omit(unique(df$FIELD_NAME))
   
-  # If we have exactly one unique value, fill all NAs with it
-  if (length(valid_years) == 1) {
-    df <- df %>% 
-      mutate(Field_Year = ifelse(is.na(Field_Year), valid_years[1], Field_Year))
-  } 
-  # If multiple values exist, keep original (but warn)
-  else if (length(valid_years) > 1) {
-    warning("Multiple Field_Year values found in one dataframe - no filling done")
+  if (length(valid_names) == 1) {
+    df <- df %>%
+      mutate(FIELD_NAME = ifelse(is.na(FIELD_NAME), valid_names[1], FIELD_NAME))
+  } else if (length(valid_names) > 1) {
+    warning("Multiple FIELD_NAME values found - no filling done")
   }
   
   return(df)
 }
 
-# 2. Apply to all dataframes
-vi_list_gt20 <- lapply(vi_list_gt20, fill_field_year)
+# Apply to all dataframes
+vi_list_gt20 <- lapply(vi_list_gt20, fill_field_name)
 
 
 #-------------------------------------------------------
@@ -548,6 +605,48 @@ vi_list_gt20<-merged_list
 vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
   df %>% tidyr::fill(Field_Year, .direction = "downup")
 })
+
+
+library(ggplot2)
+
+# Set output directory
+out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/kNDVIcheck"
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Loop through vi_list_gt20 and save plots as JPEG
+for (i in seq_along(vi_list_gt20)) {
+  df <- vi_list_gt20[[i]]
+  
+  # Check for required columns
+  if (!all(c("doy", "kNDVI", "FIELD_NAME", "YEAR") %in% names(df))) next
+  
+  # Get field name and year
+  field_name <- df$FIELD_NAME[1]
+  year <- unique(df$YEAR)
+  
+  # Handle missing or inconsistent metadata
+  if (is.na(field_name) || field_name == "") field_name <- paste0("UnknownField_", i)
+  if (length(year) != 1 || is.na(year)) year <- "UnknownYear"
+  
+  # Define JPEG filename with field name and year
+  jpeg_filename <- file.path(out_dir, paste0(field_name, "_", year, ".jpg"))
+  
+  # Create ggplot
+  p <- ggplot(df, aes(x = doy, y = kNDVI)) +
+    geom_line(color = "darkgreen", size = 1) +
+    labs(title = paste("kNDVI Plot -", field_name, "(", year, ")"),
+         x = "Day of Year (DOY)",
+         y = "kNDVI") +
+    theme_minimal()
+  
+  # Save plot as JPEG
+  ggsave(filename = jpeg_filename, plot = p, width = 8, height = 6, dpi = 300)
+}
+
+colnames(meteo_list$Baker_20_2015)
+colnames(meteo_list$Baker_20_2016)
+colnames(meteo_list$Baker_20_2017)
+colnames(meteo_list$B5_Farm_5_2018)
 #-------------------------------------------------------
 #-------------------------------------------------------
 #End of the code

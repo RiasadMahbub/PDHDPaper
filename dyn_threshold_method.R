@@ -56,7 +56,7 @@ sos_eos_df$SOS_doy<-yday(sos_eos_df$SOS)
 # Plot the comparison between observed and predicted SOS
 
 # Assuming sos_eos_df has 'observed_SOS' and 'SOS_doy' columns
-model <- lm(SOS_doy ~ observed_SOS, data = sos_eos_df)# Fit the linear model
+model <- lm(SOS_doy ~ observed_SOS, data = sos_eos_df)# Fit the linear mhttp://127.0.0.1:16709/graphics/plot_zoom_png?width=1572&height=805odel
 # sos_eos_df$predicted_SOS <- predict(model, sos_eos_df)# Calculate predictions
 
 # Calculate RMSE, MAE, and R^2
@@ -73,7 +73,7 @@ ggplot(sos_eos_df, aes(x = observed_SOS, y = SOS_doy)) +
   theme_minimal() +  # Use a minimal theme
   geom_smooth(method = "lm", col = "red", linetype = "dashed") +  # Add linear regression line
   annotate("text", 
-           x = 80, y = 200,  # Fixed position
+           x = 70, y = 210,  # Fixed position
            label = paste("R² = ", round(r2_value, 3),
                          "\nRMSE = ", round(rmse_value, 2), 
                          "\nMAE = ", round(mae_value, 2)),
@@ -131,8 +131,24 @@ ggplot(sos_eos_df, aes(x = observed_EOS, y = EOS_doy)) +
                          "\nMAE = ", round(mae_value, 2)),
            hjust = 1, vjust =3, size = 4, color = "blue")
 
+# Step 1: Compute residuals
+sos_eos_df <- sos_eos_df %>%
+  mutate(residual = EOS_doy - observed_EOS,
+         abs_residual = abs(residual))  # absolute residual for sorting
 
+# Step 2: Sort by largest absolute residuals
+high_residuals <- sos_eos_df %>%
+  arrange(desc(abs_residual)) %>%
+  select(id, observed_EOS, EOS_doy, residual, abs_residual)
 
+# Step 3 (Optional): Show top 10 high residuals
+head(high_residuals, 10)
+threshold <- 10  # or whatever threshold makes sense
+high_residuals_filtered <- sos_eos_df %>%
+  dplyr::filter(abs_residual > threshold) %>%
+  arrange(desc(abs_residual)) %>%
+  select(id, observed_EOS, EOS_doy, residual, abs_residual)
+high_residuals_filtered
 ##### optimization part########
 ## use different optimization values which are threshold 0.1 to 0.9 and calculate the rmse, mae, r2, and bias####
 ### Create a table using NDVI, four columns are rmse, mae, r2, bias
@@ -322,7 +338,6 @@ optimize_threshold_eos <- function(vi_list, vi_column = "NDVI") {
 
 # Run optimization for EOS (Harvest Date)
 vi_list_with_HDDOY <- Filter(function(df) "HDDOY" %in% names(df), vi_list_gt20)
-mlswi26_eos_results <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "MLSWI26")
 iavi_eos_results    <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "IAVI")
 vari_eos_results    <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "VARI")
 rndvi_eos_results   <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "RNDVI")
@@ -337,9 +352,6 @@ ndwi_eos_results    <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "N
 tsavi_eos_results   <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "TSAVI")
 lswi_eos_results    <- optimize_threshold_eos(vi_list_with_HDDOY, vi_column = "LSWI")
 
-# Format the results to 2 significant digits and avoid scientific notation
-mlswi26_eos_results_fmt <- mlswi26_eos_results
-mlswi26_eos_results_fmt[, -1] <- lapply(mlswi26_eos_results_fmt[, -1], function(x) format(signif(x, 2), scientific = FALSE))
 
 iavi_eos_results_fmt <- iavi_eos_results
 iavi_eos_results_fmt[, -1] <- lapply(iavi_eos_results_fmt[, -1], function(x) format(signif(x, 2), scientific = FALSE))
@@ -423,9 +435,6 @@ print(tsavi_eos_results_fmt, row.names = FALSE)
 
 cat("\nLSWI EOS Optimization Results:\n")
 print(lswi_eos_results_fmt, row.names = FALSE)
-
-
-
 
 ################################################
 ##############PLOT THE OPTIMIZATION#############
