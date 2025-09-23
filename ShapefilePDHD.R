@@ -295,6 +295,19 @@ cat("Shapefile saved to:", output_2024, "\n")
 shapefile_sullivan_path <- "C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/RyanMoore_Sullivan/2023_SFA_Rice_Boundaries.shp"
 sullivanshp <- st_read(shapefile_sullivan_path) %>% select(c(-FIELD_ID, -ORG_ID, -CLIENT_ID, -POLYGONTYP,
                                                              -FARM_ID, -CLIENT_NAM, -FARM_NAME))# Read the Sullivan shapefile
+
+library(dplyr)
+library(stringr)
+
+# Standardize sullivanshp FIELD_NAMEs to match Ryan Moore format
+sullivanshp <- sullivanshp %>%
+  mutate(FIELD_NAME = FIELD_NAME %>%
+           str_replace_all(" ", "_") %>%  # spaces to underscores
+           str_replace_all("#", "") %>%   # remove # signs
+           str_replace_all("__", "_") %>% # fix any double underscores
+           str_trim()                     # remove leading/trailing spaces
+  )
+
 ryan_moore_sullivan_data_2023 <- ryan_moore_sullivan_data %>% dplyr::filter(YEAR == 2023) ## ONLY ONE YEAR
 matched_2023 <- inner_join(ryan_moore_sullivan_data_2023, sullivanshp, by = "FIELD_NAME")
 unmatched_2023 <- anti_join(ryan_moore_sullivan_data_2023, sullivanshp, by = "FIELD_NAME")
@@ -303,8 +316,8 @@ sullivan_data_shp_2023  <- st_as_sf(matched_2023)
 sullivan_data_shp_2023  <- st_zm(sullivan_data_shp_2023 )
 st_write(sullivan_data_shp_2023 , output_2024, delete_layer = TRUE)
 cat("Shapefile saved to:", output_2024, "\n")
-
-
+unique(ryan_moore_sullivan_data_2023$FIELD_NAME)
+unique(sullivanshp$FIELD_NAME)
 # ----------------------------
 # 6. SCOTT SEEDING RICE DATA
 # ----------------------------
@@ -825,6 +838,9 @@ if (length(dups)) cat("Duplicates:\n", dups, sep = "\n") else cat("No duplicates
 PDHD2023 <- rbind(arvamatched_2023, dwmru_datashp_2023, isbell_data_2023_shp_2023, 
                   sullivan_data_shp_2023, unilever_data_shp_2023) # Merge the shapefiles
 PDHD2023<-dplyr::left_join(PDHD2023, combinedPOI, by = "FIELD_NAME")
+# Convert MULTIPOLYGON -> POLYGON (keeps only polygons)
+PDHD2023 <- st_as_sf(PDHD2023)
+PDHD2023 <- st_cast(PDHD2023, "POLYGON")
 output_path <- file.path(base_path, "2023", "PDHD2023.shp")
 st_write(PDHD2023, output_path, delete_layer = TRUE) # Write the merged shapefile
 dups <- unique(PDHD2023$FIELD_NAME[duplicated(PDHD2023$FIELD_NAME)])
@@ -894,6 +910,10 @@ merged_shapefile <- merged_shapefile %>%
 merged_shapefile <- merged_shapefile %>%
   distinct(FIELD_NAME, YEAR, .keep_all = TRUE)
 
+# Ensure all polygons are multipolygons
+# Convert tibble to sf
+merged_shapefile <- st_as_sf(merged_shapefile)
+merged_shapefile <- st_cast(merged_shapefile, "POLYGON")
 # Step 4: Save the final merged shapefile
 output_merged_path <- file.path(output_dir, "PDHD_Merged_2015_2024.shp")
 st_write(merged_shapefile, output_merged_path, delete_layer = TRUE)
@@ -1735,3 +1755,314 @@ cat(paste(output_lines, collapse = "\n"))
 # column_lengths <- nchar(names(arva_rice_data))
 # # Display column names with their lengths
 # data.frame(Column = names(arva_rice_data), Length = column_lengths)
+
+# -------------------------------------------------------------------------
+# Compare FIELD_NAMEs between yearly master lists (PDHD2015–PDHD2024) 
+# and the corresponding combined_data_YYYY datasets.
+# This identifies which fields are missing in each year's dataset.
+# -------------------------------------------------------------------------
+
+library(dplyr)
+
+# 2015
+master_2015 <- PDHD2015$FIELD_NAME
+missing_2015 <- setdiff(master_2015, combined_data_2015$FIELD_NAME)
+
+# 2016
+master_2016 <- PDHD2016$FIELD_NAME
+missing_2016 <- setdiff(master_2016, combined_data_2016$FIELD_NAME)
+
+# 2017
+master_2017 <- PDHD2017$FIELD_NAME
+missing_2017 <- setdiff(master_2017, combined_data_2017$FIELD_NAME)
+
+# 2018
+master_2018 <- PDHD2018$FIELD_NAME
+missing_2018 <- setdiff(master_2018, combined_data_2018$FIELD_NAME)
+
+# 2019
+master_2019 <- PDHD2019$FIELD_NAME
+missing_2019 <- setdiff(master_2019, combined_data_2019$FIELD_NAME)
+
+# 2020
+master_2020 <- PDHD2020$FIELD_NAME
+missing_2020 <- setdiff(master_2020, combined_data_2020$FIELD_NAME)
+
+# 2021
+master_2021 <- PDHD2021$FIELD_NAME
+missing_2021 <- setdiff(master_2021, combined_data_2021$FIELD_NAME)
+
+# 2022
+master_2022 <- PDHD2022$FIELD_NAME
+missing_2022 <- setdiff(master_2022, combined_data_2022$FIELD_NAME)
+
+# 2023
+master_2023 <- PDHD2023$FIELD_NAME
+missing_2023 <- setdiff(master_2023, combined_data_2023$FIELD_NAME)
+
+# 2024
+master_2024 <- PDHD2024$FIELD_NAME
+missing_2024 <- setdiff(master_2024, combined_data_2024$FIELD_NAME)
+
+# ---------------------------
+# Print results for all years
+# ---------------------------
+cat("Missing FIELD_NAMEs for 2015:\n"); print(missing_2015); cat("\n")
+cat("Missing FIELD_NAMEs for 2016:\n"); print(missing_2016); cat("\n")
+cat("Missing FIELD_NAMEs for 2017:\n"); print(missing_2017); cat("\n")
+cat("Missing FIELD_NAMEs for 2018:\n"); print(missing_2018); cat("\n")
+cat("Missing FIELD_NAMEs for 2019:\n"); print(missing_2019); cat("\n")
+cat("Missing FIELD_NAMEs for 2020:\n"); print(missing_2020); cat("\n")
+cat("Missing FIELD_NAMEs for 2021:\n"); print(missing_2021); cat("\n")
+cat("Missing FIELD_NAMEs for 2022:\n"); print(missing_2022); cat("\n")
+cat("Missing FIELD_NAMEs for 2023:\n"); print(missing_2023); cat("\n")
+cat("Missing FIELD_NAMEs for 2024:\n"); print(missing_2024); cat("\n")
+
+
+count_2015 <- nrow(combined_data_2015)
+count_2016 <- nrow(combined_data_2016)
+count_2017 <- nrow(combined_data_2017)
+count_2018 <- nrow(combined_data_2018)
+count_2019 <- nrow(combined_data_2019)
+count_2020 <- nrow(combined_data_2020)
+count_2021 <- nrow(combined_data_2021)
+count_2022 <- nrow(combined_data_2022)
+count_2023 <- nrow(combined_data_2023)
+count_2024 <- nrow(combined_data_2024)
+
+# Combine into a tibble for a clean view
+year_counts <- tibble(
+  YEAR = 2015:2024,
+  FIELD_NAME_count = c(count_2015, count_2016, count_2017, count_2018, count_2019,
+                       count_2020, count_2021, count_2022, count_2023, count_2024)
+)
+
+print(year_counts)
+
+# Folder path
+folder <- "G:/My Drive/PDHDMeteo"
+
+# List all CSV files
+files <- list.files(folder, pattern = "\\.csv$", full.names = FALSE)
+
+# Extract year from filenames
+file_years <- str_extract(files, "\\d{4}(?=\\.csv$)")
+
+# Count files per year
+file_count <- tibble(file = files, year = file_years) %>%
+  group_by(year) %>%
+  summarise(file_count = n()) %>%
+  arrange(year)
+
+# Convert year_counts YEAR to character to match file_count
+year_counts_char <- year_counts %>%
+  mutate(year = as.character(YEAR)) %>%
+  select(year, FIELD_NAME_count)
+
+# Combine counts
+combined_counts <- full_join(year_counts_char, file_count, by = "year") %>%
+  arrange(year)
+
+print(combined_counts)
+
+
+library(dplyr)
+library(stringr)
+
+# Folder path
+folder <- "G:/My Drive/PDHDMeteo"
+
+# List all CSV files
+files <- list.files(folder, pattern = "\\.csv$", full.names = FALSE)
+
+# Extract year from filename
+file_years <- str_extract(files, "\\d{4}(?=\\.csv$)")
+
+# Extract FIELD_NAME by removing _MeteoYYYY
+field_names <- str_remove(files, "_Meteo\\d{4}\\.csv$")
+
+# Combine into tibble
+file_df <- tibble(
+  file = files,
+  year = file_years,
+  FIELD_NAME = field_names
+)
+
+file_df
+
+# Split into separate datasets per year
+file_2015 <- file_df %>% dplyr::filter(year == "2015") %>% pull(FIELD_NAME)
+file_2016 <- file_df %>% dplyr::filter(year == "2016") %>% pull(FIELD_NAME)
+file_2017 <- file_df %>% dplyr::filter(year == "2017") %>% pull(FIELD_NAME)
+file_2018 <- file_df %>% dplyr::filter(year == "2018") %>% pull(FIELD_NAME)
+file_2019 <- file_df %>% dplyr::filter(year == "2019") %>% pull(FIELD_NAME)
+file_2020 <- file_df %>% dplyr::filter(year == "2020") %>% pull(FIELD_NAME)
+file_2021 <- file_df %>% dplyr::filter(year == "2021") %>% pull(FIELD_NAME)
+file_2022 <- file_df %>% dplyr::filter(year == "2022") %>% pull(FIELD_NAME)
+file_2023 <- file_df %>% dplyr::filter(year == "2023") %>% pull(FIELD_NAME)
+file_2024 <- file_df %>% dplyr::filter(year == "2024") %>% pull(FIELD_NAME)
+
+# -----------------------------
+# 2015
+# -----------------------------
+missing_2015 <- setdiff(combined_data_2015$FIELD_NAME, file_2015)
+cat("FIELD_NAMEs in combined_data_2015 missing from files:\n")
+print(missing_2015)
+cat("\n")
+
+# -----------------------------
+# 2016
+# -----------------------------
+missing_2016 <- setdiff(combined_data_2016$FIELD_NAME, file_2016)
+cat("FIELD_NAMEs in combined_data_2016 missing from files:\n")
+print(missing_2016)
+cat("\n")
+
+# -----------------------------
+# 2017
+# -----------------------------
+missing_2017 <- setdiff(combined_data_2017$FIELD_NAME, file_2017)
+cat("FIELD_NAMEs in combined_data_2017 missing from files:\n")
+print(missing_2017)
+cat("\n")
+
+# -----------------------------
+# 2018
+# -----------------------------
+missing_2018 <- setdiff(combined_data_2018$FIELD_NAME, file_2018)
+cat("FIELD_NAMEs in combined_data_2018 missing from files:\n")
+print(missing_2018)
+cat("\n")
+
+# -----------------------------
+# 2019
+# -----------------------------
+missing_2019 <- setdiff(combined_data_2019$FIELD_NAME, file_2019)
+cat("FIELD_NAMEs in combined_data_2019 missing from files:\n")
+print(missing_2019)
+cat("\n")
+
+# -----------------------------
+# 2020
+# -----------------------------
+missing_2020 <- setdiff(combined_data_2020$FIELD_NAME, file_2020)
+cat("FIELD_NAMEs in combined_data_2020 missing from files:\n")
+print(missing_2020)
+cat("\n")
+
+# -----------------------------
+# 2021
+# -----------------------------
+missing_2021 <- setdiff(combined_data_2021$FIELD_NAME, file_2021)
+cat("FIELD_NAMEs in combined_data_2021 missing from files:\n")
+print(missing_2021)
+cat("\n")
+
+# -----------------------------
+# 2022
+# -----------------------------
+missing_2022 <- setdiff(combined_data_2022$FIELD_NAME, file_2022)
+cat("FIELD_NAMEs in combined_data_2022 missing from files:\n")
+print(missing_2022)
+cat("\n")
+
+# -----------------------------
+# 2023
+# -----------------------------
+missing_2023 <- setdiff(combined_data_2023$FIELD_NAME, file_2023)
+cat("FIELD_NAMEs in combined_data_2023 missing from files:\n")
+print(missing_2023)
+cat("\n")
+
+# -----------------------------
+# 2024
+# -----------------------------
+missing_2024 <- setdiff(combined_data_2024$FIELD_NAME, file_2024)
+cat("FIELD_NAMEs in combined_data_2024 missing from files:\n")
+print(missing_2024)
+cat("\n")
+missing_sources_2024 <- combined_data_2024 %>%
+  dplyr::filter(FIELD_NAME %in% missing_2024) %>%
+  distinct(FIELD_NAME, source)
+
+View(missing_sources_2024)
+
+View(combined_data_2023)
+
+setdiff(combined_data_2024$FIELD_NAME,  PDHD2024$FIELD_NAME)
+
+
+#-----------------------------------------------------------
+#Check merged
+#-----------------------------------------------------------
+# Check geometry types in your shapefile
+table(st_geometry_type(merged_shapefile))
+library(sf)
+
+# Convert tibble to sf
+merged_shapefile <- st_as_sf(merged_shapefile)
+
+# Check geometry types
+unique(st_geometry_type(merged_shapefile))
+table(st_geometry_type(merged_shapefile))
+
+# Separate by geometry type
+points_sf <- merged_shapefile[st_geometry_type(merged_shapefile) %in% c("POINT", "MULTIPOINT"), ]
+polygons_sf <- merged_shapefile[st_geometry_type(merged_shapefile) %in% c("POLYGON", "MULTIPOLYGON"), ]
+
+gdf <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/CombinedAll/PDHD_Merged_2015_2024.shp")
+table(st_geometry_type(gdf))
+
+#------------------------------------------------------------------
+#------------------------------------------------------------------
+# 2015
+shp2015 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2015/PDHD2015.shp")
+print("2015 geometry types:")
+print(table(st_geometry_type(shp2015)))
+
+# 2016
+shp2016 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2016/PDHD2016.shp")
+print("2016 geometry types:")
+print(table(st_geometry_type(shp2016)))
+
+# 2017
+shp2017 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2017/PDHD2017.shp")
+print("2017 geometry types:")
+print(table(st_geometry_type(shp2017)))
+
+# 2018
+shp2018 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2018/PDHD2018.shp")
+print("2018 geometry types:")
+print(table(st_geometry_type(shp2018)))
+
+# 2019
+shp2019 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2019/PDHD2019.shp")
+print("2019 geometry types:")
+print(table(st_geometry_type(shp2019)))
+
+# 2020
+shp2020 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2020/PDHD2020.shp")
+print("2020 geometry types:")
+print(table(st_geometry_type(shp2020)))
+
+# 2021
+shp2021 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2021/PDHD2021.shp")
+print("2021 geometry types:")
+print(table(st_geometry_type(shp2021)))
+
+# 2022
+shp2022 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2022/PDHD2022.shp")
+print("2022 geometry types:")
+print(table(st_geometry_type(shp2022)))
+
+# 2023
+shp2023 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2023/PDHD2023.shp")
+print("2023 geometry types:")
+print(table(st_geometry_type(shp2023)))
+
+# 2024
+shp2024 <- st_read("C:/Users/rbmahbub/Documents/Data/DOPDOH-paper/ShapefileData/COMBINEDSHAPEFILESHEET/Yearwise/2024/PDHD2024.shp")
+print("2024 geometry types:")
+print(table(st_geometry_type(shp2024)))
+
+

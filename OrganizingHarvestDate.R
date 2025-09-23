@@ -96,8 +96,8 @@ for (df_name in names(xlsx_data)) {
 
 xlsx_data$AllFields2023Summary_v2024_09_24$FIELD_NAME
 xlsx_data$AllFields2022Summary_v2024_09_24$FIELD_NAME
-xlsx_data$AllFields2021Summary_v2024_09_24$FIELD_NAME
-View(xlsx_data$AllFields2022Summary_v2024_09_24)
+xlsx_data$AllFields2021Summary_v2024_09_24$FIELD_NAME#
+#View(xlsx_data$AllFields2022Summary_v2024_09_24)
 
 # Remove the prefix "Generation F_Generation F_" 
 # Remove the suffix "_Harvest_YYYY-MM-DD_00.shp"
@@ -251,15 +251,8 @@ HDmerged_data$FIELDNAME_YEAR <- paste(HDmerged_data$FIELD_NAME, HDmerged_data$ye
 
 HDmerged_data$FIELDNAME_YEAR 
 
-View(HDmerged_data)
+#View(HDmerged_data)
 #======================================================================================
-
-
-
-
-
-
-
 
 
 

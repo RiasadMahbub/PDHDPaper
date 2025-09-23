@@ -247,22 +247,35 @@ for (i in seq_along(vi_list_gt20_PDHD)) {
 #### 
 head(sos_eos_df$Field_Year)
 head(final_results$Field_Year)
+df$Field_Year
+df$lagtrs
 
-accumulatedsoseos <- inner_join(sos_eos_with_lag, final_results, by = "Field_Year")
+accumulatedsoseos <- inner_join(df, final_results, by = "Field_Year")
+if("GSL.x" %in% colnames(accumulatedsoseos) & "GSL.y" %in% colnames(accumulatedsoseos)) {
+  accumulatedsoseos$GSL <- ifelse(!is.na(accumulatedsoseos$GSL.x),
+                                  accumulatedsoseos$GSL.x,
+                                  accumulatedsoseos$GSL.y)
+  accumulatedsoseos <- accumulatedsoseos %>%
+    select(-GSL.x, -GSL.y)
+}
+
 accumulatedsoseos$GSL
 accumulatedsoseos$soseosgsl<-(accumulatedsoseos$EOS-accumulatedsoseos$SOSPD2)
+accumulatedsoseos$lagtrsmindeines<-(accumulatedsoseos$SD.SD-accumulatedsoseos$Greenup.Greenup)
+accumulatedsoseos$PDUD<-(accumulatedsoseos$Greenup.Greenup-accumulatedsoseos$PDDOY)
+hist(accumulatedsoseos$PDUD)
+# Check duplicate column names
+dup_cols <- colnames(accumulatedsoseos)[duplicated(colnames(accumulatedsoseos))]
+dup_cols
 
-ggplot(accumulatedsoseos, aes(x = GSL, y = accumulated_tmean, color = lagobserved)) +
+ggplot(accumulatedsoseos, aes(x = DOY_min_fit, y = PDDOY, color =Greenup.Greenup)) +
   geom_point(size = 4) +  # Increased point size
   geom_smooth(method = "lm", se = TRUE, color = "black") +  # Regression line in black
-  scale_color_gradient2(
-    low = "blue", mid = "white", high = "red", midpoint = 0, 
-    name = "Lag Observed"
-  ) +
+
   labs(
     title = "Scatter plot of GSL vs accumulated Tmean",
-    x = "GSL",
-    y = "Accumulated Tmean"
+    x = "Lag",
+    y = "GSL"
   ) +
   theme_minimal() +
   theme(
@@ -270,3 +283,294 @@ ggplot(accumulatedsoseos, aes(x = GSL, y = accumulated_tmean, color = lagobserve
     axis.title = element_text(size = 12),
     legend.title = element_text(size = 11)
   )
+
+ggplot(accumulatedsoseos, aes(x = avgsoilclay, y = GSL )) +
+  geom_point(size = 4) +  # Increased point size
+  geom_smooth(method = "lm", se = TRUE, color = "black") +  # Regression line in black
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, name = "Lag Greenup")+
+  labs(
+    title = "Scatter plot of GSL vs accumulated Tmean",
+    x = "Lag",
+    y = "GSL"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 11)
+  )
+
+
+df$lagrs
+colnames(df)
+
+
+# Load required libraries
+library(dplyr)
+library(corrplot)
+
+# -------------------------------
+# 1. Prepare feature groups
+# -------------------------------
+all_cols <- colnames(df)
+
+# Remove response variable 'lagtrs' from predictors
+predictors <- setdiff(all_cols, "lagtrs")
+
+# Split into three groups of 23 (adjust last group if needed)
+group1 <- predictors[1:23]
+group2 <- predictors[24:46]
+group3 <- predictors[47:length(predictors)]
+
+# -------------------------------
+# 2. Function to compute correlation with lagtrs
+# -------------------------------
+# -------------------------------
+# 2. Function to compute correlation with lagtrs (numeric only)
+# -------------------------------
+corr_with_lagtrs <- function(df, vars) {
+  cor_df <- df %>%
+    select(all_of(vars), lagtrs) %>%
+    select(where(is.numeric))   # keep only numeric columns
+  cor_matrix <- cor(cor_df, use = "complete.obs")
+  return(cor_matrix)
+}
+
+# Compute correlations for each group
+cor1 <- corr_with_lagtrs(df, group1)
+cor2 <- corr_with_lagtrs(df, group2)
+cor3 <- corr_with_lagtrs(df, group3)
+
+# -------------------------------
+# 3. Save correlation plots
+# -------------------------------
+output_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Multicollinearity"
+
+# Plot function
+save_corr_plot <- function(cor_matrix, filename, title_text) {
+  png(filename, width = 2000, height = 1500, res = 150)
+  corrplot(cor_matrix, method = "color", type = "upper",
+           tl.cex = 1, tl.col = "black",
+           addCoef.col = "black", number.cex = 0.8,
+           title = title_text, mar=c(0,0,3,0))
+  dev.off()
+}
+
+# Save each plot
+save_corr_plot(cor1, file.path(output_dir, "Multicollinearity_Group1.png"), "Multicollinearity: Group 1")
+save_corr_plot(cor2, file.path(output_dir, "Multicollinearity_Group2.png"), "Multicollinearity: Group 2")
+save_corr_plot(cor3, file.path(output_dir, "Multicollinearity_Group3.png"), "Multicollinearity: Group 3")
+
+library(dplyr)
+library(car)
+library(caret) # for findCorrelation
+# Load required libraries
+library(dplyr)
+library(caret)
+library(car)
+# -------------------------------
+# Load required libraries
+# -------------------------------
+library(dplyr)
+library(caret)
+library(car)
+
+# -------------------------------
+# Remove specific columns if they exist
+# -------------------------------
+df_vif <- df %>% 
+  select(-any_of(c("PDDOY", "HDDOY", "GSL", "lagder")))
+# Columns already removed from df_vif
+removed_cols <- c("PDDOY", "HDDOY", "GSL", "lagder")
+
+# Clean each group by removing non-existent columns
+group1_clean <- setdiff(group1, removed_cols)
+group2_clean <- setdiff(group2, removed_cols)
+group3_clean <- setdiff(group3, removed_cols)
+
+# -------------------------------
+# Function to prepare numeric dataset for a group
+# -------------------------------
+# -------------------------------
+# 1. Include lagtrs in numeric datasets for VIF/linear model
+# -------------------------------
+prepare_numeric_for_vif <- function(df, vars, response = "lagtrs") {
+  df %>%
+    select(any_of(c(vars, response))) %>%   # include response
+    select(where(is.numeric)) %>%
+    drop_na()
+}
+
+# Prepare numeric datasets including lagtrs
+df1_num <- prepare_numeric_for_vif(df_vif, group1_clean)
+df2_num <- prepare_numeric_for_vif(df_vif, group2_clean)
+df3_num <- prepare_numeric_for_vif(df_vif, group3_clean)
+
+# -------------------------------
+# Function to remove highly correlated columns
+# -------------------------------
+prepare_vif <- function(df_num, cor_cutoff = 0.999) {
+  # Remove zero-variance columns
+  df_num <- df_num[, sapply(df_num, function(x) var(x, na.rm = TRUE) != 0)]
+  
+  if(ncol(df_num) > 1) {
+    cor_matrix <- cor(df_num, use = "complete.obs")
+    to_remove <- findCorrelation(cor_matrix, cutoff = cor_cutoff)
+    
+    # Keep at least one column
+    if(length(to_remove) >= ncol(df_num)) to_remove <- to_remove[-1]
+    
+    if(length(to_remove) > 0) df_num <- df_num[, -to_remove, drop = FALSE]
+  }
+  return(df_num)
+}
+
+# Prepare numeric datasets after correlation filtering
+df1_vif <- prepare_vif(df1_num)
+df2_vif <- prepare_vif(df2_num)
+df3_vif <- prepare_vif(df3_num)
+
+# -------------------------------
+# Function to fit linear model safely
+# -------------------------------
+fit_vif <- function(df_vif, response = "lagtrs") {
+  if(ncol(df_vif) < 1) return(NULL)
+  lm(as.formula(paste(response, "~ .")), data = df_vif)
+}
+
+# Fit linear models
+lm1 <- fit_vif(df1_vif)
+lm2 <- fit_vif(df2_vif)
+lm3 <- fit_vif(df3_vif)
+
+# -------------------------------
+# Compute VIFs safely
+# -------------------------------
+vif_safe <- function(lm_obj) {
+  if(is.null(lm_obj)) return(NULL)
+  tryCatch(vif(lm_obj), error = function(e) NULL)
+}
+
+vif1 <- vif_safe(lm1)
+vif2 <- vif_safe(lm2)
+vif3 <- vif_safe(lm3)
+
+# -------------------------------
+# Check for aliased coefficients in lm3
+# -------------------------------
+if(!is.null(lm3)) {
+  aliased <- alias(lm3)$Complete
+  if(any(aliased == 1)) {
+    # Remove aliased columns
+    aliased_cols <- colnames(aliased)[which(aliased[1,] != 0)]
+    df3_num_clean <- df3_num %>% select(-any_of(aliased_cols))
+    lm3_clean <- lm(lagtrs ~ ., data = df3_num_clean)
+    vif3_final <- round(vif(lm3_clean), 2)
+  } else {
+    vif3_final <- round(vif3, 2)
+  }
+} else {
+  vif3_final <- NULL
+}
+
+# -------------------------------
+# Final VIFs for all groups
+# -------------------------------
+vif1_final <- round(vif1, 2)
+vif2_final <- round(vif2, 2)
+
+print("VIF Group 1:"); print(vif1_final)
+print("VIF Group 2:"); print(vif2_final)
+print("VIF Group 3:"); print(vif3_final)
+
+# -------------------------------
+# List VIFs < 5 for each group
+# -------------------------------
+vif_list_below5 <- list(
+  Group1 = vif1_final[vif1_final < 5],
+  Group2 = vif2_final[vif2_final < 5],
+  Group3 = vif3_final[vif3_final < 5]
+)
+
+print("VIFs < 5 for each group:")
+vif_list_below5
+
+#----------------------------------------------------------
+#SOIL INDICES
+#----------------------------------------------------------
+library(dplyr)
+library(corrplot)
+
+#----------------------------------------------------------
+# --- Planting Date (PD) analysis ---
+soil_mean_cols <- grep("^mean_", names(df), value = TRUE)
+soil_doy_cols  <- grep("^DOY_maxROC_", names(df), value = TRUE)
+hddoy_cols <- c("PDDOY", "HDDOY")  # include these too
+
+selected_cols <- c(soil_mean_cols, soil_doy_cols, hddoy_cols)
+
+df_corr <- df %>% select(all_of(selected_cols))
+
+corr_matrix <- cor(df_corr, use = "pairwise.complete.obs")
+
+# Correlations of PDDOY and HDDOY
+corr_PDH <- corr_matrix[c("PDDOY", "HDDOY"), ]
+
+features_PDDOY <- names(which(abs(corr_PDH["PDDOY", ]) > 0.55))
+features_HDDOY <- names(which(abs(corr_PDH["HDDOY", ]) > 0.47))
+features_HDDOY
+
+# PDDOY plot
+corr_PDDOY <- corr_matrix[c("PDDOY", features_PDDOY), c("PDDOY", features_PDDOY)]
+corrplot(corr_PDDOY, method = "color", type = "upper",
+         tl.col = "black", tl.srt = 45, addCoef.col = "black",
+         title = "Correlations of PDDOY with Selected Features (Planting)")
+features_PDDOY
+# HDDOY plot
+corr_HDDOY <- corr_matrix[c("HDDOY", features_HDDOY), c("HDDOY", features_HDDOY)]
+corrplot(corr_HDDOY, method = "color", type = "upper",
+         tl.col = "black", tl.srt = 45, addCoef.col = "black",
+         title = "Correlations of HDDOY with Selected Features (Planting)")
+
+#----------------------------------------------------------
+# --Residuals
+
+
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+
+# 1️⃣ Linear regression using features_PDDOY (excluding HDDOY)
+predictors <- setdiff(features_PDDOY, "HDDOY")  # remove HDDOY if it was included
+formula <- as.formula(paste("PDDOY ~", paste(predictors, collapse = " + ")))
+
+lm_model <- lm(formula, data = df_corr)
+
+# 2️⃣ Calculate residuals
+df_complete <- df_corr %>% select(PDDOY, all_of(predictors)) %>% na.omit()
+lm_model <- lm(formula, data = df_complete)
+df_complete$residuals_PDDOY <- resid(lm_model)
+
+
+# 3️⃣ Correlation plot of features excluding those used in linear model and response
+remaining_features <- setdiff(names(df_corr), c(predictors, "PDDOY", "HDDOY"))
+
+# Use only complete cases for remaining features
+df_remaining <- df_corr %>% select(all_of(remaining_features)) %>% na.omit()
+
+# Correlation matrix
+corr_matrix_remaining <- cor(df_remaining, use = "pairwise.complete.obs")
+
+# Convert matrix to named vector
+cor_with_residuals_vec <- setNames(cor_with_residuals[,1], rownames(cor_with_residuals))
+
+# Remove the residuals column itself
+cor_with_residuals_vec <- cor_with_residuals_vec[names(cor_with_residuals_vec) != "residuals_PDDOY"]
+
+# Filter features with |correlation| > 0.3
+strong_corr_features <- names(cor_with_residuals_vec[abs(cor_with_residuals_vec) > 0.3])
+strong_corr_features
+
+strong_corr_features
+
+

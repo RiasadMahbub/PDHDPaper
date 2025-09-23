@@ -139,8 +139,10 @@ fit_harmonic_deines <- function(df, value_col = "kNDVI", omega = 1.5) {
 # -----------------------------
 # 4. Apply to a Single Example
 # -----------------------------
-result_gcvi <- fit_harmonic_deines(vi_list_gt20[[2]], value_col = "kNDVI")
-print(result_gcvi$metrics)
+result_gcvi <- fit_harmonic_deines(vi_list_gt20[[2]], value_col = "GCVI")
+result_swir1 <- fit_harmonic_deines(vi_list_gt20[[2]], value_col = "swir1")
+result_swir2 <- fit_harmonic_deines(vi_list_gt20[[2]], value_col = "swir2")
+result_NIR <- fit_harmonic_deines(vi_list_gt20[[2]], value_col = "nir")
 
 # -----------------------------
 # 5. Plot Fit vs Observed
@@ -268,6 +270,7 @@ dir.create(save_dir, showWarnings = FALSE, recursive = TRUE)
 # -----------------------------
 results_list <- list()
 
+
 # -----------------------------
 # Loop through vi_list_gt20
 # -----------------------------
@@ -281,7 +284,7 @@ for (i in seq_along(vi_list_gt20)) {
     res$ID <- field_id
     results_list[[field_id]] <- res
     
-    # Plotting
+    # Prepare data for plotting
     df_plot <- df %>%
       mutate(DOY = yday(Date), t = DOY / 365) %>%
       dplyr::filter(!is.na(kNDVI))
@@ -318,6 +321,7 @@ for (i in seq_along(vi_list_gt20)) {
       R2, MAE, Bias, NSE
     )
     
+    # Start plot
     p <- ggplot() +
       geom_point(data = df_plot, aes(x = DOY, y = kNDVI), color = "blue", alpha = 0.6) +
       geom_line(data = fit_df, aes(x = DOY, y = kNDVI), color = "red", size = 1.2) +
@@ -327,16 +331,25 @@ for (i in seq_along(vi_list_gt20)) {
                label = coef_text, hjust = 0, vjust = 1, size = 4) +
       theme_minimal(base_size = 14)
     
+    # Add vertical lines if PDDOY/HDDOY exist
+    if ("PDDOY" %in% names(df)) {
+      p <- p + geom_vline(xintercept = unique(df$PDDOY), linetype = "dashed", color = "green", size = 1)
+    }
+    if ("HDDOY" %in% names(df)) {
+      p <- p + geom_vline(xintercept = unique(df$HDDOY), linetype = "dashed", color = "orange", size = 1)
+    }
+    
+    # Save plot
     ggsave(filename = file.path(save_dir, paste0("harmonic_fit_", field_id, ".jpeg")),
            plot = p, width = 8, height = 5)
   }
 }
-# Combine all results into a single dataframe
-coef_df <- bind_rows(results_list) %>% 
-  select(ID, everything())  # move ID to front
 
-# View or save to CSV
+# Combine results
+coef_df <- bind_rows(results_list) %>% 
+  select(ID, everything())
 print(coef_df)
+
 # write.csv(coef_df, "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Harmonic_Deines/harmonic_coefficients.csv", row.names = FALSE)
 
 fit_harmonic_deines <- function(df, value_col = "kNDVI") {
@@ -450,6 +463,115 @@ all_harmonic_results <- lapply(vi_list_gt20, function(df) {
 
 # Combine results if needed
 result_df <- bind_rows(all_harmonic_results, .id = "Field_ID")
+
+
+
+
+fit_harmonic_deines <- function(df, value_col = "kNDVI") {
+  df <- df %>%
+    dplyr::mutate(DOY = yday(Date), t = DOY / 365) %>%
+    dplyr::filter(!is.na(.data[[value_col]]))
+  
+  if (nrow(df) < 10) return(NULL)  # Skip if not enough data
+  
+  t <- df$t
+  y <- df[[value_col]]
+  omega <- 1.5
+  
+  harmonic_model <- function(t, c, a1, b1, a2, b2) {
+    c + 
+      a1 * cos(2 * pi * omega * t) + b1 * sin(2 * pi * omega * t) +
+      a2 * cos(2 * pi * omega * 2 * t) + b2 * sin(2 * pi * omega * 2 * t)
+  }
+  
+  tryCatch({
+    fit <- nlsLM(y ~ harmonic_model(t, c, a1, b1, a2, b2),
+                 start = list(c = mean(y), a1 = 0.1, b1 = 0.1, a2 = 0.1, b2 = 0.1),
+                 control = nls.lm.control(maxiter = 500))
+    
+    y_pred <- predict(fit)
+    
+    # Metrics
+    R2 <- 1 - sum((y - y_pred)^2) / sum((y - mean(y))^2)
+    NSE <- 1 - sum((y - y_pred)^2) / sum((y - mean(y))^2)
+    RMSE <- sqrt(mean((y - y_pred)^2))
+    MAE <- mean(abs(y - y_pred))
+    
+    # Predict full curve
+    t_seq <- seq(0, 1, length.out = 365)
+    pred <- predict(fit, newdata = data.frame(t = t_seq))
+    doy_seq <- round(t_seq * 365)
+    
+    # Main peak (predicted + observed)
+    max_idx <- which.max(pred)
+    doy_max_fit <- doy_seq[max_idx]
+    val_max_fit <- pred[max_idx]
+    
+    doy_max_obs <- df$DOY[which.max(y)]
+    val_max_obs <- max(y)
+    
+    # --- Small rise before main peak ---
+    # Predicted
+    pred_before_main <- pred[doy_seq < doy_max_fit]
+    doy_before_main  <- doy_seq[doy_seq < doy_max_fit]
+    if (length(pred_before_main) > 0) {
+      small_idx_fit <- which.max(pred_before_main)
+      doy_small_fit <- doy_before_main[small_idx_fit]
+      val_small_fit <- pred_before_main[small_idx_fit]
+    } else {
+      doy_small_fit <- NA
+      val_small_fit <- NA
+    }
+    
+    # Observed
+    obs_before_main <- y[df$DOY < doy_max_obs]
+    doy_before_main_obs <- df$DOY[df$DOY < doy_max_obs]
+    if (length(obs_before_main) > 0) {
+      small_idx_obs <- which.max(obs_before_main)
+      doy_small_obs <- doy_before_main_obs[small_idx_obs]
+      val_small_obs <- obs_before_main[small_idx_obs]
+    } else {
+      doy_small_obs <- NA
+      val_small_obs <- NA
+    }
+    
+    # Coefficients
+    coefs <- coef(fit)
+    
+    return(data.frame(
+      DOY_max_obs = doy_max_obs,
+      Value_max_obs = val_max_obs,
+      DOY_small_obs = doy_small_obs,
+      Value_small_obs = val_small_obs,
+      DOY_max_fit = doy_max_fit,
+      Value_max_fit = val_max_fit,
+      DOY_small_fit = doy_small_fit,
+      Value_small_fit = val_small_fit,
+      Intercept_c = coefs["c"],
+      a1 = coefs["a1"], b1 = coefs["b1"],
+      a2 = coefs["a2"], b2 = coefs["b2"],
+      R2 = R2,
+      NSE = NSE,
+      RMSE = RMSE,
+      MAE = MAE
+    ))
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+# Apply to all datasets
+all_harmonic_results <- lapply(vi_list_gt20, function(df) {
+  fit_harmonic_deines(df, value_col = "kNDVI")
+})
+
+# Combine results
+result_df <- bind_rows(all_harmonic_results, .id = "Field_ID")
+
+# Save
+write.csv(result_df,
+          "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Harmonic_Deines/harmonic_coefficients.csv",
+          row.names = FALSE)
 
 
 #================================================
@@ -652,7 +774,7 @@ meteo_summary_list <- lapply(seq_along(merged_list), function(i) {
       mean_gdd = mean(gdd, na.rm = TRUE),
       #mean_soiltemp = mean (SoilTMP0_10cm_inst, na.rm = TRUE),
       meansrad    = mean(srad, na.rm = TRUE),
-      meandayl    = sum(dayl, na.rm = TRUE),
+      #meandayl    = sum(dayl, na.rm = TRUE),
       meanRH = mean(avgRH, na.rm = TRUE),
       meanNDWI = mean(NDWI, na.rm = TRUE),
       meanLai = mean(Lai, na.rm = TRUE),
@@ -670,7 +792,8 @@ meteo_summary_list <- lapply(seq_along(merged_list), function(i) {
       names_from = Month,
       values_from = c(mean_tmean, sum_ppt, mean_vpd, mean_gdd, meanRH, mean_tmin,
                       mean_tmax, meanNDWI, meanLai, meanIAVI, meanGDVI, meanVARI,
-                      meanRNDVI, meanMLSWI26, meansrad, meandayl), # Removed meanATSAVI
+                      meanRNDVI, meanMLSWI26, meansrad#, meandayl
+                      ), # Removed meanATSAVI
       names_glue = "{.value}_M{Month}"
     ) %>%
     dplyr::mutate(
@@ -684,6 +807,7 @@ meteo_summary_list <- lapply(seq_along(merged_list), function(i) {
 })
 
 
+
 meteo_summary_df <- bind_rows(meteo_summary_list)
 combined_df <- left_join(harmonic_df, meteo_summary_df, by = "Field_ID")
 colnames(combined_df)
@@ -693,7 +817,7 @@ library(randomForest)
 df <- combined_df %>%
   dplyr::select(
     a1, b1, a2, b2, DOY_max_fit, DOY_max_obs, Value_max_obs, Value_max_fit, mean_PDDOY,
-    meandayl_M2, meandayl_M3, meandayl_M4, meandayl_M5, meandayl_M6,
+    #meandayl_M2, meandayl_M3, meandayl_M4, meandayl_M5, meandayl_M6,
     #mean_Es_M4, mean_Es_M5, mean_Es_M6,
     mean_gdd_M4, mean_gdd_M5, mean_gdd_M6, 
     #mean_gdd_M7,

@@ -152,12 +152,12 @@ DWMRU_rice_data <- DWMRU_rice_data %>%
 
 # Add YEAR column from PD, create PDDOY and HDDOY, and then drop PD and HD columns
 DWMRU_rice_data <- DWMRU_rice_data %>%
-  mutate(
+  dplyr::mutate(
     YEAR = year(PD),  # Extract Year from PD
     PDDOY = yday(PD),  # Day of Year for Planting Date
     HDDOY = yday(HD)   # Day of Year for Harvesting Date
   ) %>%
-  select(-PD, -HD)  # Drop the original PD and HD columns
+  dplyr::select(-PD, -HD)  # Drop the original PD and HD columns
 
 DWMRU_rice_data$source<-"DWMRU"
 DWMRU_rice_data$Variety<-NA
@@ -185,17 +185,19 @@ matt_morris_data <- matt_morris_data %>%
   select(FIELD_NAME, PD)
 
 # Ensure PD and HD are in Date format, create HD if missing
+
 matt_morris_data <- matt_morris_data %>%
   mutate(
-    PD = as.Date(PD, format = "%Y-%m-%d"),  # Convert PD to Date format
-    HD = if("HD" %in% names(.)) HD else NA, # Create HD if missing
-    HD = na_if(HD, ""),                      # Convert empty strings to NA
-    HD = as.Date(HD, format = "%Y-%m-%d"),   # Convert HD to Date format
+    PD = as.Date(PD),
+    # If HD exists, keep it; else create an all-NA character column
+    HD = if ("HD" %in% names(.)) as.character(HD) else as.character(NA),
+    HD = na_if(HD, ""),          # Empty strings → NA
+    HD = as.Date(HD),            # Convert to Date
     YEAR = year(PD),
     PDDOY = yday(PD),
-    HDDOY = ifelse(!is.na(HD), yday(HD), NA) # Handle missing HD values
+    HDDOY = ifelse(!is.na(HD), yday(HD), NA_integer_)
   ) %>%
-  select(-PD, -HD)  # Drop PD and HD columns
+  select(-PD, -HD)
 
 matt_morris_data$source<-"MMD"
 matt_morris_data$Variety<-NA
@@ -877,13 +879,28 @@ combined_data$HDDOY[combined_data$HDDOY > 305] <- NA
 combined_data$PDDOY[combined_data$PDDOY > 180] <- NA
 max(combined_data$HDDOY, na.rm = TRUE)
 max(combined_data$PDDOY, na.rm = TRUE)
+combined_data
+
+library(dplyr)
+
+combined_data_2015 <- combined_data %>% dplyr::filter(YEAR == 2015)
+combined_data_2016 <- combined_data %>% dplyr::filter(YEAR == 2016)
+combined_data_2017 <- combined_data %>% dplyr::filter(YEAR == 2017)
+combined_data_2018 <- combined_data %>% dplyr::filter(YEAR == 2018)
+combined_data_2019 <- combined_data %>% dplyr::filter(YEAR == 2019)
+combined_data_2020 <- combined_data %>% dplyr::filter(YEAR == 2020)
+combined_data_2021 <- combined_data %>% dplyr::filter(YEAR == 2021)
+combined_data_2022 <- combined_data %>% dplyr::filter(YEAR == 2022)
+combined_data_2023 <- combined_data %>% dplyr::filter(YEAR == 2023)
+combined_data_2024 <- combined_data %>% dplyr::filter(YEAR == 2024)
+
 #============================================================================
 #============================================================================
 #============================================================================
 #============================================================================
 #============================================================================
 #============================================================================
-# 
+# combined_data
 # 
 # 
 # combined_data$PD<-as.numeric((combined_data$PD))

@@ -156,10 +156,143 @@ make_daily <- function(df) {
   }
   return(df)
 }
+# Function to extrapolate data for a given DOY range to a full 365-day year.
+# This function is separate from interpolation and is designed to handle
+# data with a continuous DOY range that does not start at 1 or end at 365.
+extrapolate_to_365_days <- function(df) {
+  # Initialize the final result data frame with 365 rows for consistency.
+  full_doy <- 1:365
+  df_final <- data.frame(DOY = full_doy)
+  
+  # Check if the input is a valid data frame and not empty.
+  if (is.data.frame(df) && nrow(df) > 0) {
+    # We assume 'DOY' is the column name for the day of year.
+    doy_col_name <- "DOY"
+    if (!doy_col_name %in% names(df)) {
+      warning("No 'DOY' column found. Returning an empty 365-day data frame.")
+      return(df_final)
+    }
+    
+    # Identify all numeric columns in the input data frame.
+    numeric_cols <- names(df)[sapply(df, is.numeric)]
+    
+    # Process each numeric column to perform the extrapolation.
+    for (col_name in numeric_cols) {
+      # Skip the DOY column itself.
+      if (col_name == doy_col_name) {
+        next
+      }
+      
+      # --- New logic for PDDOY and HDDOY as requested by the user ---
+      # For these columns, we find the most common value and repeat it.
+      if (col_name %in% c("PDDOY", "HDDOY")) {
+        vec <- rep(NA, 365)
+        
+        # Find the most common value (mode) from the non-NA values.
+        non_na_values <- df[[col_name]][!is.na(df[[col_name]])]
+        
+        # Check if there are any non-NA values to calculate the mode from.
+        if (length(non_na_values) > 0) {
+          # Get the most frequent value.
+          mode_value <- as.numeric(names(sort(table(non_na_values), decreasing = TRUE)[1]))
+          # Fill the entire vector with the common value.
+          vec[] <- mode_value
+        }
+        
+        # Add the resulting vector to the final data frame.
+        df_final[[col_name]] <- vec
+        next # Skip to the next column in the loop.
+      }
+      
+      # --- Original extrapolation logic for all other numeric columns ---
+      # Create a new vector for this column with NAs for all 365 days.
+      vec <- rep(NA, 365)
+      
+      # Map the existing data from the data frame to the new 365-day vector.
+      tryCatch({
+        # Ensure DOY values are within the valid range (1-365) and are unique for mapping.
+        unique_doy_df <- df[!duplicated(df[[doy_col_name]]), ]
+        valid_doy_indices <- unique_doy_df[[doy_col_name]] >= 1 & unique_doy_df[[doy_col_name]] <= 365
+        
+        # Map data from the current column to the new vector.
+        # We also check for and handle any non-finite values (like Inf or NaN)
+        # by replacing them with NA, which na.approx can handle gracefully.
+        mapped_values <- unique_doy_df[[col_name]][valid_doy_indices]
+        mapped_values[!is.finite(mapped_values)] <- NA
+        vec[unique_doy_df[[doy_col_name]][valid_doy_indices]] <- mapped_values
+      }, error = function(e) {
+        warning(paste("Error mapping data for column", col_name, ". Skipping extrapolation for this entry:", e$message))
+      })
+      
+      # Find the first and last non-NA indices
+      first_idx <- which(!is.na(vec))[1]
+      last_idx <- tail(which(!is.na(vec)), 1)
+      
+      # Manually handle extrapolation at the beginning of the year (DOY 1 to first_idx-1).
+      # This creates a linear ramp from 0 up to the first data point.
+      if (!is.na(first_idx) && first_idx > 1) {
+        start_value <- 0
+        end_value <- vec[first_idx]
+        
+        # Guard against non-finite values in the data.
+        if (!is.finite(end_value)) {
+          warning(paste("Non-finite value found at first data point. Extrapolating to 0 instead."))
+          end_value <- 0
+        }
+        
+        ramp <- seq(from = start_value, to = end_value, length.out = first_idx)
+        vec[1:first_idx] <- ramp
+      }
+      
+      # Manually handle extrapolation at the end of the year (last_idx+1 to 365).
+      # This creates a linear ramp from the last data point down to 0.
+      if (!is.na(last_idx) && last_idx < 365) {
+        start_value <- vec[last_idx]
+        
+        # Guard against non-finite values in the data.
+        if (!is.finite(start_value)) {
+          warning(paste("Non-finite value found at last data point. Extrapolating from 0 instead."))
+          start_value <- 0
+        }
+        
+        end_value <- 0
+        ramp <- seq(from = start_value, to = end_value, length.out = 365 - last_idx + 1)
+        vec[last_idx:365] <- ramp
+      }
+      
+      # Use na.approx to fill any remaining gaps in the middle of the dataset
+      # while keeping the extrapolated ends intact.
+      vec_extrapolated <- na.approx(vec, na.rm = FALSE)
+      
+      # Add the extrapolated column to the final data frame.
+      df_final[[col_name]] <- vec_extrapolated
+    }
+    
+    # Add any other non-numeric columns (metadata) to the final data frame.
+    # We will simply map these as they are not subject to extrapolation.
+    non_numeric_cols <- names(df)[!sapply(df, is.numeric)]
+    for (col_name in non_numeric_cols) {
+      if (col_name != doy_col_name) {
+        temp_vec <- rep(NA, 365)
+        tryCatch({
+          unique_doy_df <- df[!duplicated(df[[doy_col_name]]), ]
+          valid_doy_indices <- unique_doy_df[[doy_col_name]] >= 1 & unique_doy_df[[doy_col_name]] <= 365
+          temp_vec[unique_doy_df[[doy_col_name]][valid_doy_indices]] <- unique_doy_df[[col_name]][valid_doy_indices]
+        }, error = function(e) {
+          warning(paste("Error mapping data for non-numeric column", col_name, ". Skipping for this entry:", e$message))
+        })
+        df_final[[col_name]] <- temp_vec
+      }
+    }
+  }
+  
+  return(df_final)
+}
+
 # Function to interpolate missing values in all numeric columns, modifying in place
 interpolate_missing_values <- function(df) {
-  if (is.data.frame(df)) {# Check if df is actually a dataframe
-    numeric_cols <- sapply(df, is.numeric)  # Identify numeric columns
+  if (is.data.frame(df)) { # Check if df is actually a dataframe
+    numeric_cols <- sapply(df, is.numeric)   # Identify numeric columns
     # Apply na.approx only to numeric columns, making sure to handle single-column dataframes
     for (col_name in names(df)[numeric_cols]) {
       df[[col_name]] <- na.approx(df[[col_name]], na.rm = FALSE)  # Apply interpolation directly on column
@@ -168,8 +301,10 @@ interpolate_missing_values <- function(df) {
   return(df)
 }
 
+
+
 #######Functoin for savitzkly golay filter##################
-apply_sg_filter <- function(df, order = 3, window_size = 15) {
+apply_sg_filter <- function(df, order = 5, window_size = 21) {
   if (!is.data.frame(df)) return(df)  # skip if not a dataframe
   numeric_cols <- sapply(df, is.numeric)
   if (!any(numeric_cols)) return(df)  # skip if no numeric columns
@@ -187,6 +322,8 @@ apply_sg_filter <- function(df, order = 3, window_size = 15) {
   })
   return(df)
 }
+
+
 
 add_siteyeardate <- function(df, name) {
   if (is.data.frame(df)) {
@@ -364,7 +501,7 @@ cl <- makeCluster(num_cores)
 # Export ALL necessary functions AND operators to workers
 clusterExport(cl, c("drop_columns", "convert_unix_time", "sort_by_date",
                     "filter_march_to_october", "make_daily",
-                    "interpolate_missing_values", "apply_sg_filter",
+                    "extrapolate_to_365_days", "interpolate_missing_values", "apply_sg_filter",
                     "add_siteyeardate", "cols_to_drop", "%>%", "left_join", "na.approx"))
 
 # Apply the negatiDOY# Apply the negative value replacement
@@ -376,35 +513,64 @@ meteo_list <- pblapply(meteo_list, convert_unix_time_meteo, cl = cl)
 
 condition1 <- function(df) {
   df$DOY <- yday(df$Date)
-  mask <- df$DOY < 100 & df$kNDVI > 0.2
+  
+  # Mask if (DOY < 100 & kNDVI > 0.2) OR (DOY > 300 & kNDVI > 0.2)
+  mask <- ((df$DOY < 100) | (df$DOY > 300)) & df$kNDVI > 0.2
+  
   df$kNDVI[mask] <- NA
-  df$NDVI[mask] <- NA
-  df$GDVI[mask] <- NA
-  df$IAVI[mask] <- NA
-  df$VARI[mask] <- NA
+  df$NDVI[mask]  <- NA
+  df$GDVI[mask]  <- NA
+  df$IAVI[mask]  <- NA
+  df$VARI[mask]  <- NA
+  
   return(df)
 }
+# Condition 2: Remove large jumps in kNDVI
 condition2 <- function(df) {
+  # Order by DOY first
+  df <- df[order(df$DOY), ]
   diffs <- abs(diff(df$kNDVI))
   idx <- which(diffs > 0.25) + 1  # shift index to the second of the pair
   df$kNDVI[idx] <- NA
   return(df)
 }
+
+# Condition 3: Detect small valleys (derivative-based)
 condition3 <- function(df) {
+  df <- df[order(df$DOY), ]
   k <- df$kNDVI
   for (i in 2:(length(k) - 1)) {
     if (!is.na(k[i - 1]) && !is.na(k[i]) && !is.na(k[i + 1])) {
-      if ((k[i] - k[i - 1]) <= -0.2 && (k[i + 1] - k[i]) >= 0.2) {
+      if ((k[i] - k[i - 1]) <= -0.03 && (k[i + 1] - k[i]) >= 0.03) {
         df$kNDVI[i] <- NA
-        df$kNDVI[i + 1] <- NA
       }
     }
   }
   return(df)
 }
+
+# Condition 4: Skip double harvest, enforce non-increasing after first peak
+condition4 <- function(df) {
+  df <- df[order(df$DOY), ]
+  k <- df$kNDVI
+  if (all(is.na(k))) return(df)
+  
+  peak_idx <- which.max(k)
+  if (peak_idx < length(k)) {
+    for (i in (peak_idx + 1):length(k)) {
+      if (!is.na(k[i]) && !is.na(k[i - 1]) && k[i] > k[i - 1]) {
+        k[i] <- k[i - 1]
+      }
+    }
+  }
+  
+  df$kNDVI <- k
+  return(df)
+}
 vi_list_gt20 <- pblapply(vi_list_gt20, condition1)
 vi_list_gt20 <- pblapply(vi_list_gt20, condition2)
 vi_list_gt20 <- pblapply(vi_list_gt20, condition3)
+vi_list_gt20 <- pblapply(vi_list_gt20, condition4)
 
 # 2. Sort by date (parallel)
 vi_list_gt20 <- pblapply(vi_list_gt20, sort_by_date, cl = cl)
@@ -426,16 +592,18 @@ setdiff(names(df_157), names(df_156))
 
 # 3. Filter to growing season (parallel)
 #vi_list_gt20 <- pblapply(vi_list_gt20, filter_march_to_october, cl = cl)
-
 # 4. Convert to daily resolution (parallel)
 vi_list_gt20 <- pblapply(vi_list_gt20, make_daily, cl = cl)
 meteo_list <- pblapply(meteo_list, make_daily, cl = cl)
 
-
-
 # 5. Interpolate missing values
 vi_list_gt20 <- pblapply(vi_list_gt20, interpolate_missing_values, cl = cl)
 meteo_list <- pblapply(meteo_list, interpolate_missing_values, cl = cl)
+
+
+vi_list_gt20 <- pblapply(vi_list_gt20, extrapolate_to_365_days, cl = cl)
+plot(vi_list_gt20[[90]]$DOY, vi_list_gt20[[90]]$kNDVI)
+
 
 # With progress bar and parallel processing
 vi_list_gt20 <- pblapply(vi_list_gt20, apply_sg_filter, cl = cl)
@@ -456,12 +624,16 @@ vi_list_gt20[[401]]$kNDVI
 plot(vi_list_gt20[[1]]$Date, vi_list_gt20[[1]]$kNDVI)
 plot(meteo_list[[1]]$Date, meteo_list[[1]]$Ec)
 
+#-----------------------------------------------------
+#Remove unrealistic HDDOY values HDDOY = 359/360
+#-----------------------------------------------------
 vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
   if ("HDDOY" %in% names(df)) {
     df$HDDOY[df$HDDOY > 350] <- NA
   }
   return(df)
 })
+
 get_max_HDDOY <- function(vi_list) {
   hddoy_values <- sapply(vi_list, function(df) {
     if ("HDDOY" %in% names(df)) max(df$HDDOY, na.rm = TRUE) else NA
@@ -469,25 +641,26 @@ get_max_HDDOY <- function(vi_list) {
   print(max(hddoy_values, na.rm = TRUE))
 }
 get_max_HDDOY(vi_list_gt20)
+
+
 #-------------------------------------------------------
 #Calculate GDD of each dataframe 
-vi_list_gt20[[1]]$Date
+#-------------------------------------------------------
 meteo_list <- pblapply(meteo_list, calculate_gdd_cumulative, cl = detectCores() - 1)
 plot(meteo_list[[1]]$Date, meteo_list[[1]]$cumulative_gdd)
 plot(meteo_list[[1]]$Date, meteo_list[[1]]$gdd)
 
-
-# Function to fill NA FIELD_NAME values per dataframe
+#--------------------------------------------------------
+#Fill missing FIELD_NAME consistently
+#---------------------------------------------------------
 fill_field_name <- function(df) {
   valid_names <- na.omit(unique(df$FIELD_NAME))
-  
   if (length(valid_names) == 1) {
     df <- df %>%
       mutate(FIELD_NAME = ifelse(is.na(FIELD_NAME), valid_names[1], FIELD_NAME))
   } else if (length(valid_names) > 1) {
     warning("Multiple FIELD_NAME values found - no filling done")
   }
-  
   return(df)
 }
 
@@ -495,76 +668,96 @@ fill_field_name <- function(df) {
 vi_list_gt20 <- lapply(vi_list_gt20, fill_field_name)
 
 
-#-------------------------------------------------------
-# JOIN METEO AND vi_list_gt20
-#-------------------------------------------------------
-# Ensure both lists are the same length
-vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
-  # Convert POSIXct with timezone CST to Date (no time)
-  df$Date <- as.Date(with_tz(df$Date, tzone = "America/Chicago"))
-  return(df)
-})
 
-meteo_list <- lapply(meteo_list, function(df) {
-  # Already Date class? If character, convert:
-  if (!inherits(df$Date, "Date")) {
-    df$Date <- as.Date(df$Date)
+
+#-------------------------------------------------------
+# Merge VI (Vegetation Index) and Meteorological Data
+#-------------------------------------------------------
+
+# Convert Date in vi_list_gt20 to Date class (CST timezone)
+vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
+  if ("Date" %in% names(df) && any(!is.na(df$Date))) {
+    # convert numeric to Date first
+    if (is.numeric(df$Date)) {
+      df$Date <- as.Date(df$Date, origin = "1970-01-01")
+    }
+    
+    # find first and last non-NA date
+    first_date <- min(df$Date, na.rm = TRUE)
+    last_date  <- max(df$Date, na.rm = TRUE)
+    
+    # build full sequence of dates with same length as df
+    full_seq <- seq(first_date - (which(!is.na(df$Date))[1] - 1),
+                    last_date + (nrow(df) - tail(which(!is.na(df$Date)), 1)),
+                    by = "day")
+    
+    # replace Date column with full sequence
+    df$Date <- full_seq[seq_len(nrow(df))]
   }
   return(df)
 })
+
+
+
+
+# Convert Date in meteo_list to Date class if not already
+meteo_list <- lapply(meteo_list, function(df) {
+  if (!inherits(df$Date, "Date")) {  # Check if Date class
+    df$Date <- as.Date(df$Date)       # Convert character to Date
+  }
+  return(df)
+})
+
+# Check that both lists have the same length
 (length(vi_list_gt20) == length(meteo_list))
-vi_names <- basename(vi_csv_files_gt20)       # From vi_list_gt20
-meteo_names <- basename(meteo_csv_files)      # From meteo_list
 
-# 1. Strip file extensions
-vi_keys_raw <- tools::file_path_sans_ext(vi_names)
-meteo_keys_raw <- tools::file_path_sans_ext(meteo_names)
+# Extract filenames from the original CSV lists
+vi_names <- basename(vi_csv_files_gt20)       # VI files
+meteo_names <- basename(meteo_csv_files)      # Meteorological files
 
-# 2. Extract field and year into a unified key
-vi_keys <- vi_keys_raw %>%
-  stringr::str_replace("_VI_", "_")  # Convert to: Baker_20_2020
+# Remove file extensions to create keys
+vi_keys_raw <- tools::file_path_sans_ext(vi_names)        # e.g., Baker_20_2020_VI
+meteo_keys_raw <- tools::file_path_sans_ext(meteo_names)  # e.g., Baker_20_2020_Meteo
 
-meteo_keys <- meteo_keys_raw %>%
-  stringr::str_replace("_Meteo", "_")  # Convert to: Baker_20_2020
+# Standardize keys for matching
+vi_keys <- vi_keys_raw %>% stringr::str_replace("_VI_", "_")          # Baker_20_2020
+meteo_keys <- meteo_keys_raw %>% stringr::str_replace("_Meteo", "_")  # Baker_20_2020
 
-# 3. Assign names to the lists using these keys
+# Assign names to the lists for easier matching
 names(vi_list_gt20) <- vi_keys
 names(meteo_list) <- meteo_keys
 
-# 4. Find common keys
-common_keys <- intersect(vi_keys, meteo_keys)
-length(common_keys)  # Should be <= 529
+# Find common keys between VI and meteo lists
+common_keys <- intersect(vi_keys, meteo_keys)  # Keep only matched fields
+length(common_keys)  # Check number of matches
 
-# 5. Filter matched lists
+# Filter lists to matched keys
 vi_matched <- vi_list_gt20[common_keys]
 meteo_matched <- meteo_list[common_keys]
 
-# 6. Confirm alignment
+# Ensure order and names match
 stopifnot(identical(names(vi_matched), names(meteo_matched)))
-# Add siteyeardate
+
+# Add site-year-date column for merging
 vi_matched <- Map(add_siteyeardate, vi_matched, names(vi_matched))
 meteo_matched <- Map(add_siteyeardate, meteo_matched, names(meteo_matched))
 
+# Function to safely left join on 'siteyeardate' avoiding column suffixes
 left_join_by_siteyeardate <- function(df1, df2) {
   if (is.data.frame(df1) && is.data.frame(df2)) {
-    # Identify overlapping columns (excluding 'siteyeardate')
-    overlap_cols <- intersect(names(df1), names(df2))
-    overlap_cols <- setdiff(overlap_cols, "siteyeardate")
-    
-    # Drop overlapping columns from meteo (df2) to avoid .x and .y
-    df2 <- df2[, !(names(df2) %in% overlap_cols), drop = FALSE]
-    
-    # Perform left join safely
-    merged <- dplyr::left_join(df1, df2, by = "siteyeardate")
+    overlap_cols <- intersect(names(df1), names(df2))        # Find overlapping columns
+    overlap_cols <- setdiff(overlap_cols, "siteyeardate")    # Exclude join key
+    df2 <- df2[, !(names(df2) %in% overlap_cols), drop = FALSE]  # Remove overlaps from df2
+    merged <- dplyr::left_join(df1, df2, by = "siteyeardate")   # Merge safely
     return(merged)
   }
   return(df1)
 }
 
-# Merge without suffixes
+# Apply merge for all matched VI and meteo dataframes
 merged_list <- Map(left_join_by_siteyeardate, vi_matched, meteo_matched)
-head(merged_list[[1]])
-merged_list[[1]]$PDDOY
+
+# Add Field_Year column based on FIELD_NAME and year
 merged_list <- lapply(merged_list, function(df) {
   year <- format(as.Date(df$Date), "%Y")
   df$Field_Year <- ifelse(
@@ -574,79 +767,64 @@ merged_list <- lapply(merged_list, function(df) {
   )
   return(df)
 })
+vi_list_gt20 <- merged_list  # Update main list
 
-vi_list_gt20<-merged_list
-# Check number of rows for each dataframe in the list
-rows_per_df <- sapply(merged_list, function(x) {
-  if (is.data.frame(x)) {
-    return(nrow(x))
-  } else {
-    return(NA)  # In case some elements aren't dataframes
-  }
-})
-# Print the results
+# Check number of rows per dataframe
+rows_per_df <- sapply(merged_list, function(x) if (is.data.frame(x)) nrow(x) else NA)
 print(rows_per_df)
-row_counts <- tibble(
-  Field_Year = names(merged_list),
-  Rows = rows_per_df
-)
-# Get row counts for all dataframes
-row_counts <- sapply(merged_list, function(df) if (is.data.frame(df)) nrow(df) else NA)
-# Filter to keep only fields with >365 rows
-fields_over_365 <- names(row_counts[row_counts > 365])
-# Print the results
-print(fields_over_365)
 
-# Filter merged_list to keep only elements with >365 rows
+# Keep only dataframes with <=365 rows (remove longer than a year)
+fields_over_365 <- names(rows_per_df[rows_per_df > 365])
 merged_list <- merged_list[!(names(merged_list) %in% fields_over_365)]
-vi_list_gt20<-merged_list
+vi_list_gt20 <- merged_list
 
-# Fill down Field_Year within each data frame
+# Fill down Field_Year within each dataframe
 vi_list_gt20 <- lapply(vi_list_gt20, function(df) {
-  df %>% tidyr::fill(Field_Year, .direction = "downup")
+  df %>% tidyr::fill(Field_Year, .direction = "downup")  # Fill NA top/bottom
 })
 
 
-library(ggplot2)
 
-# Set output directory
-out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/kNDVIcheck"
-dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
-# Loop through vi_list_gt20 and save plots as JPEG
-for (i in seq_along(vi_list_gt20)) {
-  df <- vi_list_gt20[[i]]
-  
-  # Check for required columns
-  if (!all(c("doy", "kNDVI", "FIELD_NAME", "YEAR") %in% names(df))) next
-  
-  # Get field name and year
-  field_name <- df$FIELD_NAME[1]
-  year <- unique(df$YEAR)
-  
-  # Handle missing or inconsistent metadata
-  if (is.na(field_name) || field_name == "") field_name <- paste0("UnknownField_", i)
-  if (length(year) != 1 || is.na(year)) year <- "UnknownYear"
-  
-  # Define JPEG filename with field name and year
-  jpeg_filename <- file.path(out_dir, paste0(field_name, "_", year, ".jpg"))
-  
-  # Create ggplot
-  p <- ggplot(df, aes(x = doy, y = kNDVI)) +
-    geom_line(color = "darkgreen", size = 1) +
-    labs(title = paste("kNDVI Plot -", field_name, "(", year, ")"),
-         x = "Day of Year (DOY)",
-         y = "kNDVI") +
-    theme_minimal()
-  
-  # Save plot as JPEG
-  ggsave(filename = jpeg_filename, plot = p, width = 8, height = 6, dpi = 300)
-}
+# #---------------------------------------------------------
+# #Plot kNDVI figures for visual inspection
+# #---------------------------------------------------------
+# # Set output directory
+# out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/kNDVIcheck"
+# dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+# 
+# for (i in seq_along(vi_list_gt20)) {
+#   df <- vi_list_gt20[[i]]# Loop through vi_list_gt20 and save plots as JPEG
+#   # Check for required columns
+#   if (!all(c("doy", "kNDVI", "FIELD_NAME", "YEAR") %in% names(df))) next
+#   # Get field name and year
+#   field_name <- df$FIELD_NAME[1]
+#   year <- unique(df$YEAR)
+#   # Handle missing or inconsistent metadata
+#   if (is.na(field_name) || field_name == "") field_name <- paste0("UnknownField_", i)
+#   if (length(year) != 1 || is.na(year)) year <- "UnknownYear"
+#   
+#   # Define JPEG filename with field name and year
+#   jpeg_filename <- file.path(out_dir, paste0(field_name, "_", year, ".jpg"))
+#   
+#   # Create ggplot
+#   p <- ggplot(df, aes(x = doy, y = kNDVI)) +
+#     geom_line(color = "darkgreen", size = 1) +
+#     labs(title = paste("kNDVI Plot -", field_name, "(", year, ")"),
+#          x = "Day of Year (DOY)",
+#          y = "kNDVI") +
+#     theme_minimal()
+#   
+#   # Save plot as JPEG
+#   ggsave(filename = jpeg_filename, plot = p, width = 8, height = 6, dpi = 300)
+# }
 
 colnames(meteo_list$Baker_20_2015)
 colnames(meteo_list$Baker_20_2016)
 colnames(meteo_list$Baker_20_2017)
 colnames(meteo_list$B5_Farm_5_2018)
+
+vi_list_gt20[[1]]$PDDOY
+
 #-------------------------------------------------------
 #-------------------------------------------------------
 #End of the code
