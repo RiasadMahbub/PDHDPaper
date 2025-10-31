@@ -9,6 +9,18 @@ df$lagtrs <- df$SOS_trs.sos - df$PDDOY
 df$lagtrsupdate <- df$SOS_trs.sos - df$UD.UD
 df$lagtrsgreenup <- df$SOS_trs.sos - df$Greenup.Greenup
 df$lagtrsminfit <- df$SOS_trs.sos - df$DOY_min_fit
+#---------------fix dormancy-----------------------
+# 1. Count the number of NA values
+na_count <- sum(is.na(dfharvest$Dormancy.Dormancy))
+na_count
+
+# 2. Calculate the mean of (SOS_deriv.sos - Dormancy.Dormancy), ignoring NAs
+mean_diff <- mean(dfharvest$SOS_deriv.sos - dfharvest$Dormancy.Dormancy, na.rm = TRUE)
+mean_diff
+
+# 3. Replace NA values in Dormancy.Dormancy with this mean difference
+dfharvest$Dormancy.Dormancy[is.na(dfharvest$Dormancy.Dormancy)] <- mean_diff
+
 #========================================================
 #DATAFRAME HARVEST: 
 #========================================================
@@ -21,32 +33,23 @@ df$lagtrsminfit <- df$SOS_trs.sos - df$DOY_min_fit
 # Validation: 20
 
 dfharvest_pheno <- dfharvest %>%
-  dplyr::select(  EOS_trs.eos, RD.RD, Dormancy.Dormancy, EOS_deriv.eos, 
-                  cum_meansrad, UD.UD, a2, DD.DD, SOS_trs.sos, SOS_deriv.sos,
-                  avgsoilorg, cum_vpd, cum_gdd, cum_RH, b1, avgsoilclay, cum_soiltemp, 
-                  cum_tmin, DOY_max_before_min_fit, cum_tmax, a1, lagtrsupdate,
-                  DOY_min_fit, rsp.rsp, 
-                  DOY_maxROC_EVI, 
-                  DOY_maxROC_TGI, POS.pos,
-                  DOY_maxROC_ExGR, mx.mx, a3.a3, DOY_maxROC_NMDI, 
-                  #DOY_maxROC_DSI,         #DSI and MSI is the same 
-                  DOY_maxROC_MSI , HDDOY) %>% # drop Field_ID for modeling
+  dplyr::select( RD.RD, EOS_trs.eos, EOS_deriv.eos, a2, cum_vpd, cum_meansrad, 
+                 a1, SOS_deriv.sos, avgsoilorg, cum_soiltemp,
+                HDDOY) %>% # drop Field_ID for modeling
   dplyr::filter(!is.na(HDDOY))%>%
   drop_na() # This removes rows with NA in any column
 
 
-dfharvest_pheno <- dfharvest %>%
-  dplyr::select(  EOS_trs.eos, RD.RD, Dormancy.Dormancy, EOS_deriv.eos, 
-                  avgsoilorg, a2, DD.DD, 
-                  DOY_maxROC_EVI, DOY_maxROC_IAVI,DOY_maxROC_MRBVI, DOY_maxROC_TGI, 
-                  DOY_maxROC_NMDI,DOY_maxROC_ExGR, cumGDVI,  
-                  cum_RH, avgsoilclay, cum_vpd, cum_soiltemp,
-                  UD.UD, SOS_trs.sos, a1, DOY_max_before_min_fit, 
-                  cum_tmin, b1, SOS_deriv.sos, cum_gdd, cum_tmax, 
-                  DOY_min_fit, cum_meansrad, a3.a3 , HDDOY) %>% # drop Field_ID for modeling
-  dplyr::filter(!is.na(HDDOY))%>%
-  drop_na() # This removes rows with NA in any column
-# store column names in a variable
+# dfharvest_pheno <- dfharvest %>%
+#   dplyr::select( EOS_trs.eos, RD.RD, EOS_deriv.eos, a2, 
+#                  #mean_NSDSI2, mean_NSDSI3, mean_NSDS, 
+#                  cum_vpd,
+#                  avgsoilorg, a1, DOY_max_before_min_fit, cum_meansrad_PD, DD.DD, cum_meansrad, cumGDVI_PD, 
+#                  avgsoilclay, SOS_deriv.sos, cum_soiltemp, cum_RH, cum_vpd_PD,
+#                   HDDOY) %>% # drop Field_ID for modeling
+#   dplyr::filter(!is.na(HDDOY))%>%
+#   drop_na() # This removes rows with NA in any column
+#store column names in a variable
 LIMPRFHarvestFeatures <- colnames(dfharvest_pheno)
 #-------------------------------
 set.seed(123)
@@ -164,7 +167,7 @@ sapply(train_set_harvest, class)
 # === Show Plots ===
 # Plot data for Harvest
 plot1_df_harvest_pheno <- tibble(
-  Metric = rep(c("RMSE (DOY)", "MAE (DOY)"), each = 3),
+  Metric = rep(c("RMSE (day)", "MAE (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_harvest$Train_RMSE_mean,
             summary_metrics_harvest$Val_RMSE_mean,
@@ -181,7 +184,7 @@ plot1_df_harvest_pheno <- tibble(
 )
 
 plot2_df_harvest_pheno <- tibble(
-  Metric = rep(c("R²", "Bias (DOY)"), each = 3),
+  Metric = rep(c("R²", "Bias (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_harvest$Train_R2_mean,
             summary_metrics_harvest$Val_R2_mean,
@@ -196,7 +199,16 @@ plot2_df_harvest_pheno <- tibble(
          summary_metrics_harvest$Val_Bias_sd,
          NA)
 )
+# ==========================
+# Split Harvest Data
+# ==========================
+plot2_bias_harvest_df <- plot2_df_harvest_pheno %>%
+  dplyr::filter(Metric == "Bias (day)")
 
+plot3_r2_harvest_df <- plot2_df_harvest_pheno %>%
+  dplyr::filter(Metric == "R²")
+
+# === Plot 1: RMSE and MAE for Harvest ===
 # === Plot 1: RMSE and MAE for Harvest ===
 p1_harvest_pheno <- ggplot(plot1_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
@@ -210,7 +222,7 @@ p1_harvest_pheno <- ggplot(plot1_df_harvest_pheno, aes(x = Metric, y = Value, fi
             vjust = -0.8,
             size = 4.5) +
   labs(title = "Harvesting: RMSE and MAE", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = c("#0072B2","#FFDB6D", "#D16103")) +
   theme_minimal(base_size = 14) +
   theme(
     axis.title.x = element_text(size = 16),
@@ -221,22 +233,63 @@ p1_harvest_pheno <- ggplot(plot1_df_harvest_pheno, aes(x = Metric, y = Value, fi
   )
 
 # === Plot 2: R² and Bias for Harvest ===
-p2_harvest_pheno <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+# p2_harvest_pheno <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
+#   scale_fill_manual(values = c("#0072B2","#FFDB6D", "#D16103")) +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# ==========================
+# ✅ p2 = Harvest Bias Plot
+# ==========================
+p2_harvest_pheno <- ggplot(plot2_bias_harvest_df, aes(x = Dataset, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
                 width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+            vjust = -0.8, size = 4.5) +
+  labs(title = "Harvesting: Bias (day)", y = "Bias (day)", x = "") +
+  scale_fill_manual(values = c("#0072B2", "#FFDB6D", "#D16103")) +
   theme_minimal(base_size = 14) +
   theme(
-    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    plot.title = element_text(size = 18, face = "bold")
+  )
+
+# ==========================
+# ✅ p3 = Harvest R² Plot
+# ==========================
+p3_harvest_pheno <- ggplot(plot3_r2_harvest_df, aes(x = Dataset, y = Value, fill = Dataset)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+                width = 0.2, na.rm = TRUE) +
+  geom_text(aes(label = ifelse(is.na(SD),
+                               sprintf("%.2f", Value),
+                               sprintf("%.2f ± %.2f", Value, SD))),
+            vjust = -0.8, size = 4.5) +
+  labs(title = "Harvesting: R²", y = "R²", x = "") +
+  scale_fill_manual(values = c("#0072B2", "#FFDB6D", "#D16103")) +
+  theme_minimal(base_size = 14) +
+  theme(
     axis.title.y = element_text(size = 16),
     axis.text.x = element_text(size = 14),
     axis.text.y = element_text(size = 14),
@@ -244,8 +297,10 @@ p2_harvest_pheno <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fi
   )
 
 # === Show Plots for Harvest ===
-print(p1_harvest_pheno)
+
 print(p2_harvest_pheno)
+print(p3_harvest_pheno)
+print(p1_harvest_pheno)
 
 # === Save Plots as JPEG for Harvest ===
 ggsave(
@@ -291,30 +346,38 @@ harvest_var_imp_summary_detailed %>%
 #========================================================
 #----------------------------------------------------------------
 df
-
-df_planting_pheno <- df %>%
-  dplyr::select(
-    # --- Top 20 RFE variables ---
-    SOS_trs.sos, RD.RD, cum_RH, avgsoilorg, mean_ExG, SOS_deriv.sos, cum_tmin, 
-    EOS_trs.eos, mx.mx, EOS_deriv.eos, cum_soiltemp, cum_meansrad, cum_gdd, mean_nir, 
-    Value_max_obs, DD.DD, a2, cum_tmax, UD.UD, cum_vpd, 
-    #Senescence.Senescence , 
-    PDDOY
-  ) %>% # drop Field_ID for modeling
-  dplyr::filter(!is.na(PDDOY))%>%
-  drop_na() # This removes rows with NA in any column
-#%>%dplyr::filter(DOY_max_fit >= 60)
+# 
+# df_planting_pheno <- df %>%
+#   dplyr::select(
+#     # --- Top 20 RFE variables ---
+#     SOS_trs.sos, RD.RD, cum_RH, avgsoilorg, mean_ExG, SOS_deriv.sos, cum_tmin, 
+#     EOS_trs.eos, mx.mx, EOS_deriv.eos, cum_soiltemp, cum_meansrad, cum_gdd, mean_nir, 
+#     Value_max_obs, DD.DD, a2, cum_tmax, UD.UD, cum_vpd, 
+#     #Senescence.Senescence , 
+#     PDDOY
+#   ) %>% # drop Field_ID for modeling
+#   dplyr::filter(!is.na(PDDOY))%>%
+#   drop_na() # This removes rows with NA in any column
+# #%>%dplyr::filter(DOY_max_fit >= 60)
 
 # Total number of points
 df_planting_pheno <- df %>%
   dplyr::select(
-    cum_RH, SOS_trs.sos, SOS_deriv.sos, UD.UD,
-    cum_meansrad, avgsoilorg, cum_tmin, EOS_trs.eos, 
-    EOS_deriv.eos, cum_soiltemp, cum_gdd, DD.DD, cum_vpd,
-    Value_max_obs , PDDOY
+    cum_tmin, cum_soiltemp, SOS_trs.sos, cum_gdd, SOS_deriv.sos, cum_RH, cum_vpd, avgsoilorg,
+    PDDOY
   ) %>% # drop Field_ID for modeling
   dplyr::filter(!is.na(PDDOY))%>%
   drop_na() # This removes rows with NA in any column
+# 
+# df_planting_pheno <- df %>%
+#   dplyr::select(SOS_trs.sos, cum_tmin, SOS_deriv.sos, Value_max_obs,
+# EOS_deriv.eos, EOS_trs.eos, UD.UD, cum_soiltemp, cum_gdd,
+# cum_meansrad, avgsoilorg, cum_vpd, mx.mx, DD.DD, RD.RD, mean_ExG, 
+# a2, DOY_maxROC_ExG, mean_GCC, Laglocalmaxlocalmin, cum_RH, DOY_max_before_min_fit,
+# DOY_maxROC_EVI, DOY_maxROC_sNIRvNDVILSWIS, mean_NRFIr, mean_ExGR, mean_NRFIg, 
+# mean_NDSoI, mean_WI1, PDDOY )%>% # drop Field_ID for modeling
+#   dplyr::filter(!is.na(PDDOY))%>%
+#   drop_na() # This removes rows with NA in any column
 
 # store column names in a variable
 LIMPRFPlantingFeatures <- colnames(df_planting_pheno)
@@ -463,7 +526,7 @@ sapply(train_set_planting, class)
 
 # === RMSE & MAE (with Test) for Planting ===
 plot1_df_planting_pheno <- tibble(
-  Metric = rep(c("RMSE (DOY)", "MAE (DOY)"), each = 3),
+  Metric = rep(c("RMSE (day)", "MAE (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_planting$Train_RMSE_mean,
             summary_metrics_planting$Val_RMSE_mean,
@@ -496,6 +559,11 @@ plot2_df_planting_pheno <- tibble(
          summary_metrics_planting$Val_Bias_sd,
          NA)
 )
+plot2_bias_df <- plot2_df_planting_pheno %>%
+  dplyr::filter(Metric == "Bias")
+
+plot3_r2_df <- plot2_df_planting_pheno %>%
+  dplyr::filter(Metric == "R²")
 
 # === Plot 1: RMSE and MAE for Planting ===
 p1_planting_pheno <- ggplot(plot1_df_planting_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
@@ -509,8 +577,8 @@ p1_planting_pheno <- ggplot(plot1_df_planting_pheno, aes(x = Metric, y = Value, 
             position = position_dodge(width = 0.7),
             vjust = -0.8,
             size = 4.5) +
-  labs(title = "Planting: RMSE and MAE", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+  labs( y = "Error", x = "Metric") +
+  scale_fill_manual(values = c("#0072B2","#FFDB6D", "#D16103")) +
   theme_minimal(base_size = 14) +
   theme(
     axis.title.x = element_text(size = 16),
@@ -521,30 +589,74 @@ p1_planting_pheno <- ggplot(plot1_df_planting_pheno, aes(x = Metric, y = Value, 
   )
 
 # === Plot 2: R² and Bias for Planting ===
-p2_planting_pheno <- ggplot(plot2_df_planting_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+# p2_planting_pheno <- ggplot(plot2_df_planting_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs( y = "Value", x = "Metric") +
+#   scale_fill_manual(values = c("#0072B2","#FFDB6D", "#D16103")) +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+
+# ==========================
+# ✅ p2 = Bias Plot
+# ==========================
+p2_planting_pheno <- ggplot(plot2_bias_df, aes(x = Dataset, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
                 width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Planting: R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+            vjust = -0.8, size = 4.5) +
+  labs( y = "Bias", x = "") +
+  scale_fill_manual(values = c("#0072B2", "#FFDB6D", "#D16103")) +
   theme_minimal(base_size = 14) +
   theme(
-    axis.title.x = element_text(size = 16),
     axis.title.y = element_text(size = 16),
     axis.text.x = element_text(size = 14),
     axis.text.y = element_text(size = 14),
     plot.title = element_text(size = 18, face = "bold")
   )
 
-# === Show Plots for Planting ===
+# ==========================
+# ✅ p3 = R² Plot
+# ==========================
+p3_planting_pheno <- ggplot(plot3_r2_df, aes(x = Dataset, y = Value, fill = Dataset)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+                width = 0.2, na.rm = TRUE) +
+  geom_text(aes(label = ifelse(is.na(SD),
+                               sprintf("%.2f", Value),
+                               sprintf("%.2f ± %.2f", Value, SD))),
+            vjust = -0.8, size = 4.5) +
+  labs( y = "R²", x = "") +
+  scale_fill_manual(values = c("#0072B2", "#FFDB6D", "#D16103")) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    plot.title = element_text(size = 18, face = "bold")
+  )
 
+
+
+# === Show Plots for Planting ===
+print(p3_planting_pheno)
 print(p2_planting_pheno)
 print(p1_planting_pheno)
 # === Save Plots as JPEG for Planting ===
@@ -568,327 +680,174 @@ ggsave(
   units = "in"
 )
 
+rm(p2_planting_pheno)
+rm(p1_planting_pheno)
 
-#========================================================
-# 6. PLOT VARIABLE IMPORTANCE (HARVESTING)
-#========================================================
-# Prepare data for plotting Harvest variable importance
-harvest_importance_combined <- harvest_var_imp_summary %>%
-  rename(
-    `%IncMSE` = MeanIncMSE,
-    Gini = MeanIncNodePurity
-  ) %>%
-  mutate(
-    # Simple rescaling: divide Gini by a constant to bring it to same order as %IncMSE
-    Gini_scaled = Gini / 5000,  # adjust 5000 as needed
-    Total_scaled = `%IncMSE` + Gini_scaled
+#-----------------------------------------------------
+#FEATURES
+#-------------------------------------------------------
+# This script calculates and prints descriptive statistics for a specified set of features
+# from the data frame 'df_planting_pheno'.
+# NOTE: The data frame 'df_planting_pheno' must be defined and loaded into your R environment.
+
+# Define the features to analyze as requested.
+features_to_analyze <- c(
+  "cum_RH", "SOS_trs.sos", "SOS_deriv.sos", "UD.UD",
+  "cum_meansrad", "avgsoilorg", "cum_tmin", "EOS_trs.eos",
+  "EOS_deriv.eos", "cum_soiltemp", "cum_gdd", "DD.DD", "cum_vpd",
+  "Value_max_obs", "PDDOY"
+)
+
+#' Calculates and prints key descriptive statistics for a given feature.
+#'
+#' @param df The data frame containing the feature.
+#' @param feature_name The name of the column (feature) to analyze.
+print_descriptive_stats <- function(df, feature_name) {
+  # Check if the feature exists in the data frame
+  if (!(feature_name %in% names(df))) {
+    cat(sprintf("Feature '%s' not found in data frame.\n", feature_name))
+    return()
+  }
+  
+  data <- df[[feature_name]]
+  
+  # Check if the data is numeric, as required for these calculations
+  if (!is.numeric(data)) {
+    cat(sprintf("Feature '%s' is not numeric and cannot be summarized.\n", feature_name))
+    return()
+  }
+  
+  # Calculate the 25th and 75th percentiles
+  qts <- quantile(data, probs = c(0.25, 0.75), na.rm = TRUE)
+  
+  # Consolidate all statistics
+  stats <- c(
+    Min = min(data, na.rm = TRUE),
+    Max = max(data, na.rm = TRUE),
+    SD = sd(data, na.rm = TRUE),
+    Mean = mean(data, na.rm = TRUE),
+    Percentile_75 = qts["75%"],
+    Percentile_25 = qts["25%"]
   )
+  
+  # Print formatted output using cat()
+  cat("\n======================================================\n")
+  cat(sprintf("Feature: %s\n", feature_name))
+  cat("======================================================\n")
+  cat(sprintf("Min:              %.4f\n", stats["Min"]))
+  cat(sprintf("Max:              %.4f\n", stats["Max"]))
+  cat(sprintf("Mean:             %.4f\n", stats["Mean"]))
+  cat(sprintf("SD:               %.4f\n", stats["SD"]))
+  cat(sprintf("25th Percentile:  %.4f\n", stats["Percentile_25"]))
+  cat(sprintf("75th Percentile:  %.4f\n", stats["Percentile_75"]))
+}
 
-# Convert to long format for Harvest
-harvest_importance_long <- harvest_importance_combined %>%
-  select(variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
-  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
-  mutate(variable = reorder(variable, Total_scaled))
-library(ggplot2)
-library(dplyr)
-library(tidyr)
+# Loop through all specified features and print the summary for each
+for (feature in features_to_analyze) {
+  # Assuming df_planting_pheno is the name of your data frame
+  print_descriptive_stats(df_planting_pheno, feature)
+}
 
-# Original variables in your dataframe
-original_vars <- c(
-  "RD.RD", "Dormancy.Dormancy", "EOS_trs.eos", "EOS_deriv.eos", "cum_RH", 
-  "a2", "avgsoilorg", "UD.UD", "DOY_maxROC_IAVI", "SOS_trs.sos", "cum_meansrad",
-  "cum_soiltemp", "DOY_maxROC_MRBVI", "DOY_maxROC_NMDI", "DD.DD", "avgsoilclay",
-  "DOY_maxROC_TGI", "SOS_deriv.sos", "cum_gdd", "cum_tmax", "cum_vpd",
-  "DOY_maxROC_ExGR", "cumGDVI", "cum_tmin", "b1", "DOY_max_before_min_fit",
-  "DOY_maxROC_EVI", "a1", "a3.a3", "DOY_min_fit"
-)
-
-# New names (simplified and consistent)
-new_vars <- c(
-  "RD", "Dormancy", "EOSTRS", "EOSDeriv", "RHcum", 
-  "kNDVIa2", "SOCmean", "UD", "DOY_mxROCPoD_IAVI", "SOSTRS", "SRADcum",
-  "SoilTmeancum", "DOY_mxROCPoD_MRBVI", "DOY_mxROCPoD_NMDI", "DD", "clayCmean",
-  "DOY_mxROCPoD_TGI", "SOSDeriv", "GDDcum", "AirTmax_cum", "VPDcum",
-  "DOY_mxROCPoD_ExGR", "GDVIcum", "AirTmincum", "kNDVIb1", "DOY_earlymin_kNDVI",
-  "DOY_mxROCPoD_EVI", "kNDVIa1", "a3", "DOY_earlymax_kNDVI"
-)
-
-# Assign the new variable names
-harvest_importance_combined$variable <- factor(
-  harvest_importance_combined$variable,
-  levels = original_vars,
-  labels = new_vars
-)
-
-# Map readable labels with subscripts for plotting
-variable_labels <- c(
-  "SOCmean" = expression(SOC[mean]),
-  "RHcum" = expression(RH[cum]),
-  "kNDVImax" = expression(kNDVI[max]),
-  "EOSTRS" = expression(EOS[TRS]),
-  "AirTmincum" = expression(AirTmin[cum]),
-  "AirTmax_cum"= expression(AirTax[cum]),
-  "SOSDeriv" = expression(SOS[Deriv]),
-  "SOSTRS" = expression(SOS[TRS]),
-  "SoilTmeancum" = expression(SoilTmean[cum]),
-  "EOSDeriv" = expression(EOS[Deriv]),
-  "DD" = expression(DD),
-  "VPDcum" = expression(VPD[cum]),
-  "GDDcum" = expression(GDD[cum]),
-  "SRADcum" = expression(Srad[cum]),
-  "UD" = expression(UD)
-)
-
-# Convert to long format for plotting
-harvest_importance_long <- harvest_importance_combined %>%
-  select(variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
-  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
-  mutate(variable = reorder(variable, Total_scaled))
-
-# Plot with subscripts
-p_harvest_total_importance <- ggplot(harvest_importance_long, aes(x = Value, y = variable, fill = Metric)) +
-  geom_bar(stat = "identity", width = 0.7) +
-  scale_fill_manual(
-    values = c("%IncMSE" = "#3C5488FF", "Gini_scaled" = "#9C51B6"),
-    name = "Importance Metric"
-  ) +
-  scale_y_discrete(labels = variable_labels) +  # Apply subscript labels
-  labs(
-    title = "Harvesting: Variable Importance (Combined %IncMSE and Gini)",
-    x = "Total Rescaled Importance",
-    y = NULL
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(face = "bold"),
-    legend.position = "bottom",
-    panel.grid.major.y = element_blank()
-  )
-
-print(p_harvest_total_importance)
-
-
-
-print(p_harvest_total_importance)
-
-# Save the plot for Harvest
-ggsave(
-  filename = "harvesting_variable_importance_total_stacked_scaled.jpeg", # Changed filename
-  plot = p_harvest_total_importance,
-  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
-  dpi = 300,
-  width = 10,
-  height = 8,
-  units = "in"
-)
-
-
-#========================================================
-# 6. PLOT VARIABLE IMPORTANCE (PLANTING)
-#========================================================
-# Prepare data for plotting Planting variable importance
-# planting_importance_combined <- planting_var_imp_summary %>%
-#   rename(
-#     `%IncMSE` = MeanIncMSE,
-#     Gini = MeanIncNodePurity
-#   ) %>%
-#   mutate(
-#     # Apply Z-score normalization
-#     `%IncMSE` = scale(`%IncMSE`),
-#     `Gini_scaled` = scale(Gini),
-#     Total_scaled = `%IncMSE` + `Gini_scaled`
+hist(df_planting_pheno$cum_meansrad)
+# #========================================================
+# # 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (HARVESTING)
+# #========================================================
+# # Get the top 15 features for Harvesting based on Total_scaled importance
+# top_15_harvest_features <- harvest_importance_combined %>%
+#   arrange(desc(Total_scaled)) %>%
+#   head(15) %>%
+#   pull(variable)
+# 
+# # Loop through the top 15 features and create scatter plots
+# for (feature in top_15_harvest_features) {
+#   # Create a data frame for plotting (using combined_df as the source)
+#   plot_data <- dfharvest_pheno %>%
+#     dplyr::select(!!sym(feature), HDDOY) %>%
+#     drop_na() # Ensure no NAs in the selected columns for plotting
+#   
+#   p <- ggplot(plot_data, aes_string(x = feature, y = "HDDOY")) +
+#     geom_point(alpha = 0.6, color = "#3C5488FF") +
+#     geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
+#     labs(
+#       title = paste("Harvesting: HDDOY vs.", feature),
+#       x = feature,
+#       y = "HDDOY"
+#     ) +
+#     theme_minimal(base_size = 14) +
+#     theme(
+#       plot.title = element_text(size = 16, face = "bold"),
+#       axis.title.x = element_text(size = 14),
+#       axis.title.y = element_text(size = 14)
+#     )
+#   
+#   print(p)
+#   
+#   # Save the plot
+#   ggsave(
+#     filename = paste0("harvesting_HDDOY_vs_", feature, ".jpeg"),
+#     plot = p,
+#     path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Features",
+#     dpi = 300,
+#     width = 8,
+#     height = 6,
+#     units = "in"
 #   )
-
-planting_importance_combined <- planting_var_imp_summary %>%
-  rename(
-    `%IncMSE` = MeanIncMSE,
-    Gini = MeanIncNodePurity
-  ) %>%
-  mutate(
-    # Simple rescaling: divide Gini by a constant to bring it to same order as %IncMSE
-    Gini_scaled = Gini / 5000,  # adjust 5000 as needed
-    Total_scaled = `%IncMSE` + Gini_scaled
-  )
-
-
-# Convert to long format for Planting
-planting_importance_long <- planting_importance_combined %>%
-  select(Variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
-  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
-  mutate(Variable = reorder(Variable, Total_scaled))
-
-
-
-# Map original variable names to readable names
-planting_importance_long <- planting_importance_long %>%
-  mutate(
-    Variable = recode(
-      Variable,
-      "avgsoilorg" = "SOCmean",
-      "cum_RH" = "RHcum",
-      "Value_max_obs" = "kNDVImax",
-      "EOS_trs.eos" = "EOSTRS",
-      "cum_tmin" = "AirTmincum",
-      "SOS_deriv.sos" = "SOSDeriv",
-      "SOS_trs.sos" = "SOSTRS",
-      "cum_soiltemp" = "SoilTmeancum",
-      "EOS_deriv.eos" = "EOSDeriv",
-      "DD.DD" = "DD",
-      "cum_vpd" = "VPDcum",
-      "cum_gdd" = "GDDcum",
-      "cum_meansrad" = "Sradcum",
-      "UD.UD" = "UD"
-    ),
-    Variable = reorder(Variable, Total_scaled)
-  )
-# Map readable labels with subscripts
-variable_labels <- c(
-  "SOCmean" = expression(SOC[mean]),
-  "RHcum" = expression(RH[cum]),
-  "kNDVImax" = expression(kNDVI[max]),
-  "EOSTRS" = expression(EOS[TRS]),
-  "AirTmincum" = expression(AirTmin[cum]),
-  "SOSDeriv" = expression(SOS[Deriv]),
-  "SOSTRS" = expression(SOS[TRS]),
-  "SoilTmeancum" = expression(SoilTmean[cum]),
-  "EOSDeriv" = expression(EOS[Deriv]),
-  "DD" = expression(DD),
-  "VPDcum" = expression(VPD[cum]),
-  "GDDcum" = expression(GDD[cum]),
-  "Sradcum" = expression(Srad[cum]),
-  "UD" = expression(UD)
-)
-
-
-# Plot with formatted y-axis
-p_planting_total_importance <- ggplot(planting_importance_long, aes(x = Value, y = Variable, fill = Metric)) +
-  geom_bar(stat = "identity", width = 0.7) +
-  scale_fill_manual(
-    values = c("%IncMSE" = "#3C5488FF", "Gini_scaled" = "#9C51B6"),
-    name = "Importance Metric"
-  ) +
-  scale_y_discrete(labels = variable_labels) +
-  labs(
-    title = "Planting: Variable Importance (Combined Standardized %IncMSE and Gini)",
-    x = "Total Standardized Importance",
-    y = NULL
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(face = "bold"),
-    legend.position = "bottom",
-    panel.grid.major.y = element_blank()
-  )
-
-print(p_planting_total_importance)
+# }
+# 
+# 
+# #========================================================
+# # 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (PLANTING)
+# #========================================================
+# # Get the top 15 features for Planting based on Total_scaled importance
+# top_15_planting_features <- planting_importance_combined %>%
+#   arrange(desc(Total_scaled)) %>%
+#   head(15) %>%
+#   pull(Variable) # Note: 'Variable' column name for planting_importance_combined
+# 
+# # Loop through the top 15 features and create scatter plots
+# for (feature in top_15_planting_features) {
+#   # Create a data frame for plotting (using combined_df as the source)
+#   plot_data <- df %>%
+#     dplyr::select(!!sym(feature), PDDOY) %>%
+#     drop_na() # Ensure no NAs in the selected columns for plotting
+#   
+#   # Fit a linear model to get the R-squared value
+#   lm_model <- lm(as.formula(paste("PDDOY ~", feature)), data = plot_data)
+#   r_squared <- summary(lm_model)$r.squared
+#   
+#   p <- ggplot(plot_data, aes_string(x = feature, y = "PDDOY")) +
+#     geom_point(alpha = 0.6, color = "#00A087FF") +
+#     geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
+#     labs(
+#       title = paste0("Planting: PDDOY vs. ", feature, " (R² = ", sprintf("%.2f", r_squared), ")"), # Add R-squared to title
+#       x = feature,
+#       y = "PDDOY"
+#     ) +
+#     theme_minimal(base_size = 14) +
+#     theme(
+#       plot.title = element_text(size = 16, face = "bold"),
+#       axis.title.x = element_text(size = 14),
+#       axis.title.y = element_text(size = 14)
+#     )
+#   
+#   print(p)
+#   
+#   # Save the plot
+#   ggsave(
+#     filename = paste0("planting_PDDOY_vs_", feature, ".jpeg"),
+#     plot = p,
+#     path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Features",
+#     dpi = 300,
+#     width = 8,
+#     height = 6,
+#     units = "in"
+#   )
+# }
 
 
 
-# Save the plot for Planting
-ggsave(
-  filename = "planting_variable_importance_total_stacked_scaled.jpeg", # Changed filename
-  plot = p_planting_total_importance,
-  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
-  dpi = 300,
-  width = 10,
-  height = 8,
-  units = "in"
-)
-
-#========================================================
-# 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (HARVESTING)
-#========================================================
-# Get the top 15 features for Harvesting based on Total_scaled importance
-top_15_harvest_features <- harvest_importance_combined %>%
-  arrange(desc(Total_scaled)) %>%
-  head(15) %>%
-  pull(variable)
-
-# Loop through the top 15 features and create scatter plots
-for (feature in top_15_harvest_features) {
-  # Create a data frame for plotting (using combined_df as the source)
-  plot_data <- dfharvest_pheno %>%
-    dplyr::select(!!sym(feature), HDDOY) %>%
-    drop_na() # Ensure no NAs in the selected columns for plotting
-  
-  p <- ggplot(plot_data, aes_string(x = feature, y = "HDDOY")) +
-    geom_point(alpha = 0.6, color = "#3C5488FF") +
-    geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
-    labs(
-      title = paste("Harvesting: HDDOY vs.", feature),
-      x = feature,
-      y = "HDDOY"
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title.x = element_text(size = 14),
-      axis.title.y = element_text(size = 14)
-    )
-  
-  print(p)
-  
-  # Save the plot
-  ggsave(
-    filename = paste0("harvesting_HDDOY_vs_", feature, ".jpeg"),
-    plot = p,
-    path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Features",
-    dpi = 300,
-    width = 8,
-    height = 6,
-    units = "in"
-  )
-}
-
-
-#========================================================
-# 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (PLANTING)
-#========================================================
-# Get the top 15 features for Planting based on Total_scaled importance
-top_15_planting_features <- planting_importance_combined %>%
-  arrange(desc(Total_scaled)) %>%
-  head(15) %>%
-  pull(Variable) # Note: 'Variable' column name for planting_importance_combined
-
-# Loop through the top 15 features and create scatter plots
-for (feature in top_15_planting_features) {
-  # Create a data frame for plotting (using combined_df as the source)
-  plot_data <- df %>%
-    dplyr::select(!!sym(feature), PDDOY) %>%
-    drop_na() # Ensure no NAs in the selected columns for plotting
-  
-  # Fit a linear model to get the R-squared value
-  lm_model <- lm(as.formula(paste("PDDOY ~", feature)), data = plot_data)
-  r_squared <- summary(lm_model)$r.squared
-  
-  p <- ggplot(plot_data, aes_string(x = feature, y = "PDDOY")) +
-    geom_point(alpha = 0.6, color = "#00A087FF") +
-    geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
-    labs(
-      title = paste0("Planting: PDDOY vs. ", feature, " (R² = ", sprintf("%.2f", r_squared), ")"), # Add R-squared to title
-      x = feature,
-      y = "PDDOY"
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title.x = element_text(size = 14),
-      axis.title.y = element_text(size = 14)
-    )
-  
-  print(p)
-  
-  # Save the plot
-  ggsave(
-    filename = paste0("planting_PDDOY_vs_", feature, ".jpeg"),
-    plot = p,
-    path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/Features",
-    dpi = 300,
-    width = 8,
-    height = 6,
-    units = "in"
-  )
-}
+library(reprtree)
+reprtree:::plot.getTree(rf_model_planting, k = 3, depth = 5)  # Plot first tree, depth limited
 
 
 

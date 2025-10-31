@@ -1,3 +1,344 @@
+
+#----------------------------------------------------
+#PHENOLOGY TRS 
+#----------------------------------------------------
+#----------------------------------------------------
+#PHENOLOGY TRS 
+#----------------------------------------------------
+# Extract your pieces
+pheno <- phenology_list[[1]]
+vi <- vi_list_gt20[[1]]
+# Replicate phenology row to match nrow(vi)
+pheno_expanded <- pheno[rep(1, nrow(vi)), ]
+# Combine them side by side
+baker20_2019 <- cbind(pheno_expanded, vi)
+# Inspect
+head(baker20_2019)
+baker20_2019$Planting_SOSTRS_Period <- baker20_2019$SOS_trs.sos - baker20_2019$PDDOY
+baker20_2019$Planting_SOSDER_Period <- baker20_2019$SOS_deriv.sos - baker20_2019$PDDOY
+baker20_2019$Planting_UD_Period <- baker20_2019$UD.UD - baker20_2019$PDDOY
+
+library(ggplot2)
+# Ensure unique names
+colnames(baker20_2019) <- make.unique(colnames(baker20_2019))
+# detect DOY and kNDVI column names (robust)
+xcol <- if ("doy" %in% names(baker20_2019)) "doy" else if ("DOY" %in% names(baker20_2019)) "DOY" else stop("No DOY/doy column found")
+kcol <- names(baker20_2019)[grepl("^kNDVI", names(baker20_2019))][1]
+if (is.na(kcol)) stop("No kNDVI column found")
+
+library(ggplot2)
+
+# Ensure unique names
+colnames(baker20_2019) <- make.unique(colnames(baker20_2019))
+# Detect DOY and kNDVI column names (robust)
+xcol <- if ("doy" %in% names(baker20_2019)) "doy" else if ("DOY" %in% names(baker20_2019)) "DOY" else stop("No DOY/doy column found")
+kcol <- names(baker20_2019)[grepl("^kNDVI", names(baker20_2019))][1]
+if (is.na(kcol)) kcol <- names(baker20_2019)[grepl("^kNDVI_smoothed", names(baker20_2019))][1] # Use mock name if kNDVI not found
+if (is.na(kcol)) stop("No kNDVI column found")
+
+# Extract scalar phenology values (first row)
+pddoy   <- as.numeric(baker20_2019$PDDOY[1])
+sos_trs <- as.numeric(baker20_2019$SOS_trs.sos[1])
+sos_der <- as.numeric(baker20_2019$SOS_deriv.sos[1])
+ud_val  <- as.numeric(baker20_2019$UD.UD[1])
+gu_val  <- as.numeric(baker20_2019$Greenup.Greenup[1])
+
+# --- Legend Data Frame for Vertical Lines ---
+pheno_lines <- data.frame(
+  DOY = c(pddoy, sos_trs, sos_der, ud_val, gu_val),
+  # --- UPDATED EVENT LABELS using expression() for subscripting ---
+  Event = c(
+    "PD", 
+    "SOS[TRS]", 
+    "SOS[DER]", 
+    "Upturn Date (UD)", 
+    "Greenup Date"
+  ),
+  Color = c("orange", "deepskyblue", "red", "purple", "navy")
+)
+# Ensure the factor levels keep the order defined above
+pheno_lines$Event <- factor(pheno_lines$Event, levels = pheno_lines$Event) 
+# --- End Legend Data Frame ---
+
+# Compute y positions for horizontal segments
+kmin <- min(baker20_2019[[kcol]], na.rm = TRUE)
+kmax <- max(baker20_2019[[kcol]], na.rm = TRUE)
+yr <- kmax - kmin
+y1 <- kmax - 0.05 * yr    # Planting -> SOSTRS
+y2 <- kmax - 0.20 * yr    # Planting -> SOSDER
+y3 <- kmax - 0.35 * yr    # Planting -> UD
+y4 <- kmax - 0.50 * yr    # UD -> SOSTRS (not used in text labels, but kept for consistency)
+y5 <- kmax - 0.65 * yr    # Planting -> Greenup
+
+# Base plot
+p <- ggplot(baker20_2019, aes_string(x = xcol, y = kcol)) +
+  geom_point(color = "forestgreen", alpha = 0.6) +
+  labs(
+    x = "Day of Year (day)",
+    y = expression(italic(k) * "NDVI (unitless)")
+  ) +
+  theme_classic(base_size = 20) +
+  scale_x_continuous(breaks = seq(0, max(baker20_2019[[xcol]], na.rm = TRUE), by = 20)) +
+  scale_y_continuous(breaks = seq(0, 0.8, by = 0.1), limits = c(0, 0.8)) +
+  
+  # --- Legend Adjustments ---
+  scale_color_manual(
+    name = "Phenology Events", # Legend Title (will be hidden by element_blank below)
+    values = setNames(pheno_lines$Color, pheno_lines$Event),
+    # Use expression() to correctly render the subscripted legend labels
+    labels = expression(
+      "PD", 
+      italic(SOS)[italic(TRS)], 
+      italic(SOS)[italic(DER)], 
+      italic(UD), 
+      Greenup
+    )
+  ) +
+  theme(
+    legend.position = c(0.98, 0.98), # Top right corner (0,0 is bottom-left, 1,1 is top-right)
+    legend.justification = c("right", "top"),
+    legend.title = element_blank(), # Remove legend title for cleaner look
+    legend.background = element_rect(fill = "white", color = "black"), # Add a border/background
+    legend.key.size = unit(1.5, "lines"), # Adjust size of legend keys
+    legend.key.width = unit(3, "lines") # NEW: Increase width (length) of the line in the legend
+  ) +
+  # --- Increased line thickness in legend via size = 2 ---
+  guides(color = guide_legend(override.aes = list(linetype = "dashed", size = 5))) 
+
+
+# Add vertical lines for key phenology points (using new data frame and aes for legend)
+if (any(!is.na(pheno_lines$DOY))) {
+  p <- p + 
+    geom_vline(data = na.omit(pheno_lines), 
+               aes(xintercept = DOY, color = Event), 
+               linetype = "dashed", 
+               size = 0.7)
+}
+
+
+# Add horizontal segments and labels between phenology points
+
+# --- REVISED SECTION FOR IMPROVED ITALICS AND SUBSCRIPT PARSING ---
+
+# Planting -> SOSTRS (Duration_PD and Period are italic, SOS is now italic)
+if (!is.na(pddoy) && !is.na(sos_trs)) {
+  p <- p +
+    annotate("segment", x = pddoy, xend = sos_trs, y = y1, yend = y1, colour = "deepskyblue", size = 1.2) +
+    annotate("text", x = (pddoy + sos_trs) / 2.85, y = y1 + 0.02 * yr,
+             # Label: Duration_PD_SOS[TRS] = X days
+             label = paste0("italic(Duration_PD_) * italic(SOS)[italic(TRS)] * \" = \" * ", round(sos_trs - pddoy, 1), " * days"),
+             colour = "deepskyblue", size = 5, hjust = 0.5, parse = TRUE)
+}
+# Planting -> SOSDER (Duration_PD and Period are italic, SOS is now italic)
+if (!is.na(pddoy) && !is.na(sos_der)) {
+  p <- p +
+    annotate("segment", x = pddoy, xend = sos_der, y = y2, yend = y2, colour = "red", size = 1.2) +
+    annotate("text", x = (pddoy + sos_der) / 2.85, y = y2 + 0.02 * yr,
+             # Label: Duration_PD_SOS[DER] = X days
+             label = paste0("italic(Duration_PD_) * italic(SOS)[italic(DER)] * \" = \" * ", round(sos_der - pddoy, 1), " * days"),
+             colour = "red", size = 5, hjust = 0.5, parse = TRUE)
+}
+
+# Planting -> UD (Duration_PD_UD is italic)
+if (!is.na(pddoy) && !is.na(ud_val)) {
+  p <- p +
+    annotate("segment", x = pddoy, xend = ud_val, y = y3, yend = y3, colour = "purple", size = 1.2) +
+    annotate("text", x = (pddoy + ud_val) / 2.70, y = y3 + 0.02 * yr,
+             # Label: Duration_PD_UD = X days
+             label = paste0("italic(Duration_PD_UD) * \" = \" * ", round(ud_val - pddoy, 1), " * days"),
+             colour = "purple", size = 5, hjust = 0.5, parse = TRUE)
+}
+
+# NEW: Planting -> Greenup (Duration_PD_Greenup is italic)
+if (!is.na(pddoy) && !is.na(gu_val)) {
+  p <- p +
+    annotate("segment", x = pddoy, xend = gu_val, y = y5, yend = y5, colour = "navy", size = 1.2) +
+    annotate("text", x = (pddoy + gu_val) / 2.75, y = y5 + 0.02 * yr,
+             # Label: Duration_PD_Greenup = X days
+             label = paste0("italic(Duration_PD_Greenup) * \" = \" * ", round(gu_val - pddoy, 1), " * days"),
+             colour = "navy", size = 5, hjust = 0.5, parse = TRUE)
+}
+# Print plot
+print(p)
+# define file path
+save_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/phenology_trs_lag.jpeg"
+# save the plot with 300 dpi
+ggsave(filename = save_path, plot = p, dpi = 300, width = 14, height = 6, units = "in")
+
+#-----------------------------------------------------------
+#GDD-VI Divergence-----------------------------------------
+#-----------------------------------------------------------
+# Define the custom color palette for consistency across both plots
+color_palette <- c("Early" = "#0072B2", "Mid" = "#D55E00", "Late" = "#CC79A7")
+
+# ==============================================================================
+# 2. DATA MANIPULATION (Including the new cum_gdd column)
+# ==============================================================================
+
+# ==============================================================================
+# 2. DATA MANIPULATION (Including the new cum_gdd and cumkNDVI columns)
+# ==============================================================================
+
+# Calculate Percentiles and assign PD_group (Now df_percentile includes cum_gdd and cumkNDVI)
+df_percentile <- df %>%
+  mutate(
+    PD_group = cut(PDDOY,
+                   breaks = quantile(PDDOY, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE),
+                   include.lowest = TRUE,
+                   labels = c("Early", "Mid", "Late")),
+    # Ensures factor levels are in the desired order for the box plot legend
+    PD_group = factor(PD_group, levels = c("Early", "Mid", "Late"))
+  )
+
+# Sample the data (used in the original script but not strictly necessary for the main plot)
+set.seed(245)
+example_fields_10 <- df_percentile %>%
+  group_by(PD_group) %>%
+  # We need to ensure we sample enough fields for demonstration purposes
+  sample_n(size = min(4, n()), replace = FALSE) %>%
+  select(PD_group, Field_Year, PDDOY, cum_gdd, cumkNDVI) %>% # UPDATED: Include cumkNDVI
+  arrange(PD_group, PDDOY) %>%
+  ungroup()
+# Combine the three sample field-years for the line plot
+df_plot <- bind_rows(
+  merged_list$Way_03_2024 %>% mutate(Field_Year = "F_20578_65_Wg_N_2023"),
+  merged_list$Shanes_2015 %>% mutate(Field_Year = "Clark13_2021"),
+  merged_list$Kelly_02_2019  %>% mutate(Field_Year = "Haley_2017")
+)
+# Create a mapping from Field_Year to PD_group names
+df_plot <- df_plot %>%
+  mutate(PD_group_label = case_when(
+    Field_Year == "F_20578_65_Wg_N_2023" ~ "Early",
+    Field_Year == "Clark13_2021" ~ "Mid",
+    Field_Year == "Haley_2017" ~ "Late",
+    TRUE ~ Field_Year  # keep original if not in mapping
+  )) %>%
+  # Explicitly convert to factor with desired order for guaranteed legend order
+  mutate(PD_group_label = factor(PD_group_label, levels = c("Early", "Mid", "Late")))
+
+kndvi_annotation_df <- tibble(
+  PD_group_label = factor(c("Early", "Mid", "Late"), levels = c("Early", "Mid", "Late")),
+  DOY = 163,
+  kNDVI = c(0.82, 0.79, 0.76), # Requested Y coordinates
+  # Mocked cumkNDVI values to display (these would be the actual values for the 3 fields)
+  cumkNDVI = c(45.2, 30.1, 15.5)
+) %>%
+  # NEW: Create a plotmath compatible label string to italicize 'k'
+  mutate(
+    annotation_label = paste0("'Cumulative'~italic(k)*'NDVI: '~", round(cumkNDVI, 1))
+  )
+
+g_main <- ggplot(df_plot, aes(x = DOY, y = kNDVI, color = PD_group_label)) +
+  # Shaded region for DOY 163–190
+  annotate("rect",
+           xmin = 163, xmax = 190,
+           ymin = -Inf, ymax = Inf,
+           alpha = 0.8, fill = "gray80") +
+  geom_line(size = 1.8) +
+  # UPDATED: Use annotation_label and parse=TRUE to render italic 'k'
+  geom_text(
+    data = kndvi_annotation_df,
+    aes(
+      label = annotation_label, # Use the pre-calculated plotmath label
+      color = PD_group_label # Apply group color for clarity
+    ),
+    hjust = -0.1, # Push text slightly to the right of DOY 163
+    vjust = 0.5,
+    size = 4,
+    fontface = "bold",
+    show.legend = FALSE, # Hide legend for these labels
+    parse = TRUE # Instructs ggplot to interpret the label string as a math/plotmath expression
+  ) +
+  scale_x_continuous(breaks = seq(0, max(df_plot$DOY, na.rm = TRUE), by = 20)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+  # APPLY NEW COLORS TO LINES
+  scale_color_manual(values = color_palette) +
+  labs(
+    title = expression(italic(k) * "NDVI Seasonal Curves for Early, Mid, and Late Planting Years"),
+    subtitle = "Shaded region = DOY 163–190",
+    x = "Day of Year (Day)",
+    # This axis title already has the correct italic 'k'
+    y = expression(italic(k)*"NDVI (unitless)"),
+    color = "Planting Date Class"
+  ) +
+  theme_classic(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.title = element_text(size = 18),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 18),
+    # Legend position remains top right as requested previously
+    legend.position = c(0.95, 0.95),
+    legend.justification = c("right", "top") # Anchor the legend to the top-right corner
+  )
+
+# Prepare annotation data for the box plot (median cum_gdd per group)
+gdd_annotation_df <- df_percentile %>%
+  group_by(PD_group) %>%
+  summarise(
+    # Calculate the median GDD (the value the user wants to annotate)
+    median_cum_gdd = median(cum_gdd, na.rm = TRUE),
+    # Calculate the upper hinge (75th percentile) and add a small offset for label placement
+    y_position = quantile(cum_gdd, 0.75, na.rm = TRUE) + (sd(cum_gdd, na.rm = TRUE) / 10)
+  )
+
+g_inset <- ggplot(df_percentile, aes(x = PD_group, y = cum_gdd, fill = PD_group)) +
+  geom_boxplot(width = 0.6, alpha = 0.8) +
+  # NEW: Add annotation for median cum_gdd value on top of the box
+  geom_text(
+    data = gdd_annotation_df,
+    aes(
+      x = PD_group,
+      y = y_position,
+      label = format(round(median_cum_gdd, 0), big.mark = ",", trim = TRUE) # Format the median number
+    ),
+    vjust = 0.7, # Position above the box
+    size = 0.38,
+    fontface = "bold",
+    color = "black"
+  ) +
+  labs(
+    #title = expression(bold("Cumulative GDD Distribution")),
+    y = expression("Cumulative GDD ("*degree*C*" day)"),
+    x = NULL # Remove x-axis label for cleaner inset
+  ) +
+  # APPLY NEW COLORS TO BOX PLOT FILLS
+  scale_fill_manual(values = color_palette) +
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.text.x = element_text( hjust = 1, size = 10),
+    axis.title.y = element_text(size = 10),
+    legend.position = "none", # No legend in the inset plot
+    panel.background = element_rect(fill = "gray98"), # Light background for contrast
+    plot.background = element_rect(colour = "black", linewidth = 0.5) # Border for the inset
+  )
+
+# Normalized y position (0.5 to 0.8, height = 0.3)
+final_plot <- ggdraw(g_main) +
+  draw_plot(
+    g_inset,
+    x = 0.10,  # start x (left)
+    y = 0.45,  # start y (bottom)
+    width = 0.35,  # width of the inset
+    height = 0.35 # height of the inset
+  )
+
+# Display the final plot
+print(final_plot)
+
+# --- Save Plot 2 ---
+ggsave(
+  filename = "GDDDIvergenceGVI.jpeg",
+  plot = final_plot,
+  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
+  dpi = 300,
+  width = 12,
+  height = 8,
+  units = "in"
+)
+
+
 # Load necessary libraries
 library(ggplot2)
 library(lubridate)
@@ -370,179 +711,4 @@ ggplot(all_sensors_data, aes(x = system.time_start, y = Value, color = Sensor)) 
     plot.title = element_text(size = 18),
     plot.subtitle = element_text(size = 14)
   )
-
-
-#----------------------------------------------------
-#PHENOLOGY TRS 
-#----------------------------------------------------
-# Extract your pieces
-pheno <- phenology_list[[1]]
-vi <- vi_list_gt20[[1]]
-# Replicate phenology row to match nrow(vi)
-pheno_expanded <- pheno[rep(1, nrow(vi)), ]
-# Combine them side by side
-baker20_2019 <- cbind(pheno_expanded, vi)
-# Inspect
-head(baker20_2019)
-baker20_2019$Planting_SOSTRS_Period <- baker20_2019$SOS_trs.sos - baker20_2019$PDDOY
-baker20_2019$Planting_SOSDER_Period <- baker20_2019$SOS_deriv.sos - baker20_2019$PDDOY
-baker20_2019$Planting_UD_Period <- baker20_2019$UD.UD - baker20_2019$PDDOY
-
-
-library(ggplot2)
-# Ensure unique names
-colnames(baker20_2019) <- make.unique(colnames(baker20_2019))
-# detect DOY and kNDVI column names (robust)
-xcol <- if ("doy" %in% names(baker20_2019)) "doy" else if ("DOY" %in% names(baker20_2019)) "DOY" else stop("No DOY/doy column found")
-kcol <- names(baker20_2019)[grepl("^kNDVI", names(baker20_2019))][1]
-if (is.na(kcol)) stop("No kNDVI column found")
-
-# extract scalar phenology values (first row)
-pddoy    <- as.numeric(baker20_2019$PDDOY[1])
-sos_trs  <- as.numeric(baker20_2019$SOS_trs.sos[1])
-sos_der  <- as.numeric(baker20_2019$SOS_deriv.sos[1])
-ud_val   <- as.numeric(baker20_2019$UD.UD[1])
-
-# compute y positions for horizontal segments
-kmin <- min(baker20_2019[[kcol]], na.rm = TRUE)
-kmax <- max(baker20_2019[[kcol]], na.rm = TRUE)
-yr <- kmax - kmin
-y1 <- kmax - 0.05 * yr   # Planting → SOSTRS
-y2 <- kmax - 0.20 * yr   # Planting → SOSDER
-y3 <- kmax - 0.35 * yr   # Planting → UD
-y4 <- kmax - 0.50 * yr   # UD → SOSTRS
-
-# Create a legend data frame
-legend_df <- data.frame(
-  x = rep(NA, 4),
-  y = rep(NA, 4),
-  label = c("Planting Date (PD)", "SOSTRS", "SOSDERIV", "UD"),
-  color = c("orange", "blue", "red", "purple")
-)
-
-# start base plot
-p <- ggplot(baker20_2019, aes_string(x = xcol, y = kcol)) +
-  geom_point(color = "forestgreen", alpha = 0.6) +
-  labs(
-    x = "Day of Year (day)",
-    y = "kNDVI (unitless)"
-  ) +
-  theme_classic(base_size = 20) +
-  scale_x_continuous(breaks = seq(0, max(baker20_2019[[xcol]], na.rm = TRUE), by = 20)) +
-  scale_y_continuous(breaks = seq(0, 0.8, by = 0.1), limits = c(0, 0.8))
-
-# add vertical lines
-if (!is.na(pddoy))   p <- p + geom_vline(xintercept = pddoy,  colour = "orange", linetype = "dashed", size = 0.7)
-if (!is.na(sos_trs)) p <- p + geom_vline(xintercept = sos_trs, colour = "blue",   linetype = "dashed", size = 0.7)
-if (!is.na(sos_der)) p <- p + geom_vline(xintercept = sos_der, colour = "red",    linetype = "dashed", size = 0.7)
-if (!is.na(ud_val))  p <- p + geom_vline(xintercept = ud_val,   colour = "purple", linetype = "dashed", size = 0.7)
-
-# add horizontal segments and labels between PDDOY and each SOS
-if (!is.na(pddoy) && !is.na(sos_trs)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = sos_trs, y = y1, yend = y1, colour = "blue", size = 1.2) +
-    annotate("text", x = (pddoy + sos_trs) / 2, y = y1 + 0.02 * yr,
-             label = paste0("Planting→SOSTRS = ", round(sos_trs - pddoy, 1), " d"),
-             colour = "blue", size = 4, hjust = 0.5)
-}
-if (!is.na(pddoy) && !is.na(sos_der)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = sos_der, y = y2, yend = y2, colour = "red", size = 1.2) +
-    annotate("text", x = (pddoy + sos_der) / 2, y = y2 + 0.02 * yr,
-             label = paste0("Planting→SOSDER = ", round(sos_der - pddoy, 1), " d"),
-             colour = "red", size = 4, hjust = 0.5)
-}
-if (!is.na(pddoy) && !is.na(ud_val)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = ud_val, y = y3, yend = y3, colour = "purple", size = 1.2) +
-    annotate("text", x = (pddoy + ud_val) / 2, y = y3 + 0.02 * yr,
-             label = paste0("Planting→UD = ", round(ud_val - pddoy, 1), " d"),
-             colour = "purple", size = 4, hjust = 0.5)
-}
-
-# NEW: horizontal segment between UD and SOSTRS
-if (!is.na(ud_val) && !is.na(sos_trs)) {
-  p <- p +
-    annotate("segment", x = sos_trs, xend = ud_val, y = y4, yend = y4, colour = "darkgreen", size = 1.2) +
-    annotate("text", x = (sos_trs + ud_val) / 2, y = y4 + 0.02 * yr,
-             label = paste0("UD→SOSTRS = ", round(sos_trs-ud_val  , 1), " d"),
-             colour = "darkgreen", size = 4, hjust = 0.5)
-}
-
-# print plot
-print(p)
-# define file path
-save_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/phenology_trs_lag.jpeg"
-
-# save the plot with 300 dpi
-ggsave(filename = save_path, plot = p, dpi = 300, width = 14, height = 6, units = "in")
-
-
-
-# compute y positions for horizontal segments (adjusted for spacing)
-y1 <- kmax - 0.05 * yr   # Planting→SOSTRS
-y2 <- kmax - 0.20 * yr   # Planting→SOSDER
-y3 <- kmax - 0.35 * yr   # Planting→UD
-y4 <- kmax - 0.50 * yr   # UD→SOSTRS
-y5 <- kmax - 0.65 * yr   # UD - 50 days
-
-# start base plot
-p <- ggplot(baker20_2019, aes_string(x = xcol, y = kcol)) +
-  geom_point(color = "forestgreen", alpha = 0.6) +
-  labs(
-    x = "Day of Year (day)",
-    y = "kNDVI (unitless)"
-  ) +
-  theme_classic(base_size = 20) +
-  scale_x_continuous(breaks = seq(0, max(baker20_2019[[xcol]], na.rm = TRUE), by = 20)) +
-  scale_y_continuous(breaks = seq(0, 0.8, by = 0.1), limits = c(0, 0.8))
-
-# vertical lines
-if (!is.na(pddoy))   p <- p + geom_vline(xintercept = pddoy,  colour = "orange", linetype = "dashed", size = 0.7)
-if (!is.na(sos_trs)) p <- p + geom_vline(xintercept = sos_trs, colour = "blue",   linetype = "dashed", size = 0.7)
-if (!is.na(sos_der)) p <- p + geom_vline(xintercept = sos_der, colour = "red",    linetype = "dashed", size = 0.7)
-if (!is.na(ud_val))  p <- p + geom_vline(xintercept = ud_val,   colour = "purple", linetype = "dashed", size = 0.7)
-
-# horizontal segments & labels (text on left)
-if (!is.na(pddoy) && !is.na(sos_trs)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = sos_trs, y = y1, yend = y1, colour = "blue", size = 1.2) +
-    annotate("text", x = pddoy-70, y = y1 + 0.02 * yr,
-             label = paste0("Planting_SOSTRS_Period = ", round(sos_trs - pddoy, 1), " days"),
-             colour = "blue", size = 4, hjust = 0)
-}
-if (!is.na(pddoy) && !is.na(sos_der)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = sos_der, y = y2, yend = y2, colour = "red", size = 1.2) +
-    annotate("text", x = pddoy-70, y = y2 + 0.02 * yr,
-             label = paste0("Planting_SOSDER_Period = ", round(sos_der - pddoy, 1), " days"),
-             colour = "red", size = 4, hjust = 0)
-}
-if (!is.na(pddoy) && !is.na(ud_val)) {
-  p <- p +
-    annotate("segment", x = pddoy, xend = ud_val, y = y3, yend = y3, colour = "purple", size = 1.2) +
-    annotate("text", x = pddoy-70, y = y3 + 0.02 * yr,
-             label = paste0("Planting_UD_Period = ", round(ud_val - pddoy, 1), " days"),
-             colour = "purple", size = 4, hjust = 0)
-}
-if (!is.na(ud_val) && !is.na(sos_trs)) {
-  p <- p +
-    annotate("segment", x = sos_trs, xend = ud_val, y = y4, yend = y4, colour = "darkgreen", size = 1.2) +
-    annotate("text", x = sos_trs-70, y = y4 + 0.02 * yr,
-             label = paste0("UD_SOSTRS_days = ", round(sos_trs - ud_val, 1), " days"),
-             colour = "darkgreen", size = 4, hjust = 0)
-}
-# UD - 50 days line
-p <- p +
-  annotate("segment", x = ud_val - 50, xend = ud_val, y = y5, yend = y5, colour = "brown", size = 1.2) +
-  annotate("text", x = ud_val - 50 -20, y = y5 + 0.02 * yr,
-           label = "UD - 50 days", colour = "brown", size = 4, hjust = 0)
-
-# print plot
-print(p)
-
-# save figure
-save_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/phenology_trs_lag.jpeg"
-ggsave(filename = save_path, plot = p, dpi = 300, width = 14, height = 6, units = "in")
-
 

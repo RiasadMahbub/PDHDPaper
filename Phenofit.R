@@ -10,7 +10,13 @@ library(progressr)
 library(dplyr)
 library(ggplot2)
 library(gridExtra)  # For arranging multiple plots
+# Load and use it to update R
+library(installr)
+# Check RStudio version
+rstudioapi::versionInfo()
 
+# Or more specifically:
+rstudioapi::versionInfo()$version
 
 # Helper function to check, install, and load packages
 ensure_package <- function(pkg) {
@@ -25,70 +31,55 @@ ensure_package <- function(pkg) {
 ensure_package("dplyr")
 ensure_package("lubridate")
 ensure_package("phenofit")
-
+sessionInfo()
 
 
 # Extract data
 dates <- as.Date(vi_list_gt20$F_8316_62_2_2015$Date)
 ndvi  <- vi_list_gt20$F_8316_62_2_2015$kNDVI
-
 # Convert dates to DOY (day-of-year)
 t <- as.numeric(format(dates, "%j"))
 t
 # Create full output timeline (daily from Jan 1 to Dec 31)
 tout <- 1:365
-
 # Choose phenology fitting methods
 methods <- c("AG", "Beck", "Elmore", "Gu", "Zhang")
 fit <- curvefit(ndvi, t, tout, methods)
-
 # Extract fitted data for AG model
 x <- fit$model$AG
-
 # Extract phenology metrics
 trs <- PhenoTrs(x)
 der <- PhenoDeriv(x)
 gu  <- PhenoGu(x)
 kl  <- PhenoKl(x)
-
-
 op <- par(mfrow = c(2, 2), mar = c(3,4,2,1), oma = c(0,0,2,0))
 on.exit(par(op), add = TRUE)
-
 # Panel 1
 PhenoTrs(x)
 box()
 #title("PhenoTrs", line = 0.5, cex.main = 1.2)
 axis(1, labels = FALSE, tick = FALSE)
 axis(2, labels = FALSE, tick = FALSE)
-
 # Panel 2
 PhenoDeriv(x)
 box()
 #title("PhenoDeriv", line = 0.5, cex.main = 1.2)
 axis(1, labels = FALSE, tick = FALSE)
 axis(2, labels = FALSE, tick = FALSE)
-
 # Panel 3
 PhenoGu(x)
 box()
 #title("PhenoGu", line = 0.5, cex.main = 1.2)
 axis(1, labels = FALSE, tick = FALSE)
 axis(2, labels = FALSE, tick = FALSE)
-
 # Panel 4
 PhenoKl(x)
 box()
 #title("PhenoKl", line = 0.5, cex.main = 1.2)
 axis(1, labels = FALSE, tick = FALSE)
 axis(2, labels = FALSE, tick = FALSE)
-
 # Global title
 mtext("Phenology Metrics", outer = TRUE, cex = 1.3, font = 2)
-
-
-
-# Extract AG model parameters
 params <- x$par["nlminb", ]  # extract parameter row as named vector
 
 # Combine phenology metrics + model parameters into one named vector
@@ -132,14 +123,17 @@ print(phenology_df)
 #----------------------------------------------------
 
 # Optional: use more threads
-plan(multisession, workers = parallel::detectCores() - 1)
-
+#plan(multisession, workers = parallel::detectCores() - 1)
+example(future)
+plan(sequential)  # Clean shutdown of any multisession clusters
+#plan(multisession, workers =  availableCores())
+#plan(multisession, workers = parallel::detectCores() - 1)
+plan(multisession, workers =availableCores()-1)
 # Start timing
 start_time <- Sys.time()
 
 # Enable progress bar globally
 handlers(global = TRUE)
-handlers("progress")
 
 progressr::with_progress({
   p <- progressor(steps = length(vi_list_gt20))
@@ -219,28 +213,77 @@ cat("DD.DD exists:", has_DD, "\n")
 
 
 merged_list <- merged_list[names(merged_list) != "Pond_South_2023"]
-merged_list <- lapply(merged_list, function(df) {  # Make sure Field_Year exists in both
-  if("Field_Year" %in% colnames(df)) {
-    df <- df %>%   # Join phenology_df columns UD.UD and DD.DD by Field_Year
-      left_join(
-        phenology_df %>% select(Field_Year, UD.UD, DD.DD),
-        by = "Field_Year"
-      )
-  }
-  return(df)
-})
-# Check if UD.UD and DD.DD exist in each dataframe inside merged_list
-check_cols <- lapply(names(merged_list), function(field_id) {
-  df <- merged_list[[field_id]]
-  cols <- colnames(df)
-  
-  list(
-    Field_ID = field_id,
-    has_UD = "UD.UD" %in% cols,
-    has_DD = "DD.DD" %in% cols
-  )
-})
+# --- Function 1: Merge phenology info + add kNDVISOSderiv
+library(dplyr)
+library(stringr)
 
+# --- Function 1: Merge phenology info + add kNDVISOSderiv safely
+add_pheno_and_kndvi <- function(merged_list, phenology_df) {
+  
+  merged_list <- lapply(merged_list, function(df) {
+    if ("Field_Year" %in% colnames(df)) {
+      
+      # Remove old duplicate columns (if exist)
+      df <- df %>%
+        select(-matches("\\.x$|\\.y$"))  # drop old merged columns like UD.UD.x, .y, etc.
+      
+      # Join new phenology data
+      df <- df %>%
+        left_join(
+          phenology_df %>% select(Field_Year, UD.UD, DD.DD, SOS_deriv.sos, EOS_deriv.eos, POS.pos),
+          by = "Field_Year"
+        )
+      
+      # Get Field-Year
+      fy <- unique(df$Field_Year)
+      
+      # Get SOS_deriv.sos DOY
+      sos_doy <- phenology_df %>%
+        dplyr::filter(Field_Year == fy) %>%
+        pull(SOS_deriv.sos)
+      
+      # Add kNDVISOSderiv value
+      if (length(sos_doy) == 1 && !is.na(sos_doy)) {
+        if (all(c("doy", "kNDVI") %in% names(df))) {
+          closest_index <- which.min(abs(df$doy - sos_doy))
+          df$kNDVISOSderiv <- df$kNDVI[closest_index]
+        } else {
+          df$kNDVISOSderiv <- NA
+        }
+      } else {
+        df$kNDVISOSderiv <- NA
+      }
+    }
+    
+    # Clean up any duplicate suffixes again, just in case
+    df <- df %>%
+      rename_with(~ str_remove(., "\\.x$|\\.y$"))
+    
+    return(df)
+  })
+  
+  return(merged_list)
+}
+
+# --- Function 2: Check column presence
+check_phenology_columns <- function(merged_list) {
+  lapply(names(merged_list), function(field_id) {
+    df <- merged_list[[field_id]]
+    cols <- colnames(df)
+    
+    list(
+      Field_ID = field_id,
+      has_UD = "UD.UD" %in% cols,
+      has_DD = "DD.DD" %in% cols,
+      has_SOSDERIV = "SOS_deriv.sos" %in% cols,
+      has_kNDVISOSderiv = "kNDVISOSderiv" %in% cols
+    )
+  })
+}
+
+# --- Run them
+merged_list <- add_pheno_and_kndvi(merged_list, phenology_df)
+check_cols <- check_phenology_columns(merged_list)
 # Convert to data frame for easier viewing
 check_cols_df <- do.call(rbind, lapply(check_cols, as.data.frame))
 
@@ -272,13 +315,14 @@ meteo_summary_list <- lapply(names(merged_list), function(field_id) {
   df <- merged_list[[field_id]]
   df$Date <- as.Date(df$Date)
   df$DOY <- yday(df$Date)
-  # Get DOY_max_fit from the same dataframe
-  doy_max <- unique(df$UD.UD)
-  if(length(doy_max) != 1 || is.na(doy_max)) {
-    doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
-  }
+  #Get DOY_max_fit from the same dataframe
+  # doy_max <- unique(df$UD.UD)
+  # if(length(doy_max) != 1 || is.na(doy_max)) {
+  #   doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
+  # }
+  doy_max<-193
   # Define 45-day window
-  start_doy <- doy_max - 45
+  start_doy <- doy_max - 30
   end_doy <- doy_max
   df_window <- df %>%
     dplyr::filter(DOY >= start_doy & DOY <= end_doy)
@@ -313,7 +357,8 @@ meteo_summary_list <- lapply(names(merged_list), function(field_id) {
       cum_RH        = sum(avgRH, na.rm = TRUE),
       cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
       avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
-      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE)
+      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE),
+      kNDVISOSderiv = unique(kNDVISOSderiv, na.rm = TRUE)
     ) %>%
     dplyr::mutate(
       Field_ID = field_id,
@@ -325,13 +370,13 @@ meteo_summary_list <- lapply(names(merged_list), function(field_id) {
   
   return(df_summary)
 })
-
+meteo_summary_list[[1]]$cum_meansrad
+meteo_summary_list[[1]]$cum_RH
 meteo_summary_listharvest <- lapply(names(merged_list), function(field_id) {
   df <- merged_list[[field_id]]
   
   df$Date <- as.Date(df$Date)
   df$DOY <- yday(df$Date)
-  
   # Get DOY_max_fit from the same dataframe
   doy_max <- unique(df$DD.DD)
   if(length(doy_max) != 1 || is.na(doy_max)) {
@@ -368,12 +413,15 @@ meteo_summary_listharvest <- lapply(names(merged_list), function(field_id) {
       cumGDVI       = sum(GDVI, na.rm = TRUE),
       cumRNDVI      = sum(Lai, na.rm = TRUE),
       cum_vpd       = sum(vpd, na.rm = TRUE),
+      cumkNDVI       = sum(kNDVI, na.rm = TRUE),
       cum_tmin      = sum(tmin, na.rm = TRUE),
       cum_tmax      = sum(tmax, na.rm = TRUE),
       cum_RH        = sum(avgRH, na.rm = TRUE),
       cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
       avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
       avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE)
+
+      
     ) %>%
     dplyr::mutate(
       Field_ID = field_id,
@@ -386,16 +434,32 @@ meteo_summary_listharvest <- lapply(names(merged_list), function(field_id) {
   return(df_summary)
 })
 
+# Check which data frames are empty
+empty_check <- sapply(meteo_summary_listharvest, function(df) nrow(df) == 0)
+
+# Print results
+if (any(empty_check)) {
+  cat("⚠️ These data frames are empty:\n")
+  print(names(meteo_summary_listharvest)[empty_check])
+} else {
+  cat("✅ All data frames have rows.\n")
+}
+
+# Optional: separate non-empty data frames
+non_empty_dfs <- meteo_summary_listharvest[!empty_check]
+
 
 meteo_summary_df <- bind_rows(meteo_summary_list)
 meteo_summary_df <- meteo_summary_df %>%
   mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
   rename(Field_Year = Field_ID)
+mean(meteo_summary_df$cum_meansrad)
 
 meteo_summary_df_harvest <- bind_rows(meteo_summary_listharvest)
 meteo_summary_df_harvest <- meteo_summary_df_harvest %>%
   mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
   rename(Field_Year = Field_ID)
+meteo_summary_df_harvest
 
 #df <- phenology_df %>%
   #left_join(meteo_summary_df, by = "Field_Year")
@@ -434,7 +498,7 @@ dfharvest <- dfharvest %>%
     -PDDOY.y,
     -HDDOY.y
   )    
-
+dfharvest
 #---------------------------------------------------------
 #Problematic data
 #---------------------------------------------------------
@@ -465,15 +529,354 @@ dfharvest <- dfharvest[!dfharvest$Field_Year %in% remove_list, ]
 dfharvest$lagtrsupdate <- dfharvest$SOS_trs.sos - dfharvest$UD.UD
 dfharvest$lagtrsgreenup <- dfharvest$SOS_trs.sos - dfharvest$Greenup.Greenup
 
+names(df)[grepl("cum", names(df))]
+names(dfharvest)[grepl("cum", names(dfharvest))]
+
+
+cum_cols <- names(df)[grepl("cum", names(df))]
+# Rename to indicate planting-period
+df_plant <- df[, cum_cols]
+names(df_plant) <- paste0(names(df_plant), "_PD")
+dfharvest <- cbind(dfharvest, df_plant)
+names(dfharvest)[grepl("cum", names(dfharvest))]
+df_harvest$cum_meansrad_PD
 #------------------------------------------------------------------------------
 #RANDOM FOREST
 #------------------------------------------------------------------------------
 library(randomForest)
 library(Metrics)
 
+
+#######################################################
+#Phenology data check
+# 10 smallest values ignoring NA
+head(sort(phenology_df$Dormancy.Dormancy, na.last = NA), 20)
+# Get indices of 10 smallest UD.UD values ignoring NA
+idx <- order(phenology_df$Greenup.Greenup, na.last = NA)[1:20]
+
+# Extract corresponding Field_Year values
+phenology_df$Field_Year[idx]
+
+#problems F_8252_7_HF_2015, F_8320_66_6_2020, F_20578_65_Wg_N_2021
+
+#------------------------------------------------------------------------------------------
+#### Create another meteo for Residual plots of SOS
+#------------------------------------------------------------------------------------------
+
+merged_list_sos <- merged_list[names(merged_list) != "Pond_South_2023"]
+phenology_df$SOS_trs.sos
+merged_list_sos <- lapply(merged_list_sos, function(df) {  # Make sure Field_Year exists in both
+  if("Field_Year" %in% colnames(df)) {
+    df <- df %>%   # Join phenology_df columns UD.UD and DD.DD by Field_Year
+      left_join(
+        phenology_df %>% select(Field_Year, SOS_trs.sos, DD.DD),
+        by = "Field_Year"
+      )
+  }
+  return(df)
+})
+# Check if SOS_trs.sos and DD.DD exist in each dataframe inside merged_list_sos
+check_cols <- lapply(names(merged_list_sos), function(field_id) {
+  df <- merged_list_sos[[field_id]]
+  cols <- colnames(df)
+  
+  list(
+    Field_ID = field_id,
+    has_SOS_trs.sos = "SOS_trs.sos" %in% cols,
+    has_DD = "DD.DD" %in% cols,
+    has_kNDVISOSderiv = "kNDVISOSderiv" %in% cols
+  )
+})
+
+# Convert to data frame for easier viewing
+check_cols_df <- do.call(rbind, lapply(check_cols, as.data.frame))
+print(check_cols_df)
+# list of soil indices
+soil_indices <- c("AFRI1600", "AFRI2100", "ARVI", "ATSAVI", "BCC", "BNDVI", "BWDRVI", "CIG", "CVI",
+                  "DSI", "DSWI1", "DSWI2", "DSWI3", "DSWI4", "DSWI5", "DVI",
+                  "ENDVI", "EVI", "EVI2", "EVIv", "ExG", "ExGR", "ExR","FCVI", 
+                  "GARI", "GBNDVI", "GCC", "GDVI", "GEMI", "GLI", "GNDVI", "GOSAVI", "GRNDVI", "GRVI", "GSAVI", 
+                  "GVMI","IAVI", "IKAW", "IPVI",
+                  "MCARI1", "MCARI2", "MGRVI", "MNDVI", "MNLI", "MRBVI", "MSAVI", "MSI", "MSR", "MTVI1", "MTVI2",
+                  "NDDI",  "NDII", "NDMI", "NDPI", "NDVI", "NDYI", "NGRDI", "NIRv", 
+                  "NLI", "NMDI", "NRFIg", "NRFIr", "NormG", "NormNIR", "NormR", 
+                  "OCVI", "OSAVI", "RCC", "RDVI", "RGBVI", "RGRI", "RI",
+                  "SARVI", "SAVI", "SAVI2", "SEVI", "SI",  "SLAVI", "SR", "SR2", 
+                  "TDVI", "TGI", "TSAVI", "TVI", "TriVI", "VARI", "VIG", "WDRVI", "WDVI",
+                  "bNIRv", "sNIRvLSWI", "sNIRvNDPI", "sNIRvNDVILSWIP", "sNIRvNDVILSWIS", "sNIRvSWIR",
+                  "ANDWI", "AWEInsh", "AWEIsh",  "LSWI", "MBWI", "MLSWI26", "MLSWI27", "MNDWI", "MuWIR", 
+                  "NDPonI", "NDTI", "NDVIMNDWI", "NDWI", "NDWIns", "NWI", "OSI", "PI",
+                  "RNDVI", "SWM", "WI1", "WI2", "WI2015", "WRI", "BI", "BITM", "BIXS",
+                  "BaI", "DBSI", "EMBI", "MBI", "NDSoI", "NSDS", "NSDSI1", "NSDSI2", "NSDSI3",
+                  "RI4XS", "kIPVI", "kNDVI", "kRVI", "nir")
+# Remove "Dewitt_2_2023" from merged_list_sos
+merged_list_sos[["Dewitt_2_2023"]] <- NULL
+meteo_summary_list_sos <- lapply(names(merged_list_sos), function(field_id) {
+  df <- merged_list_sos[[field_id]]
+  df$Date <- as.Date(df$Date)
+  df$DOY <- yday(df$Date)
+  # Get DOY_max_fit from the same dataframe
+  doy_max <- unique(df$SOS_trs.sos)
+  if(length(doy_max) != 1 || is.na(doy_max)) {
+    doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
+  }
+  # Define 45-day window
+  start_doy <- doy_max - 45
+  end_doy <- doy_max
+  df_window <- df %>%
+    dplyr::filter(DOY >= start_doy & DOY <= end_doy)
+  
+  # ---- compute soil index means within the window ----
+  soil_means <- df_window %>%
+    dplyr::summarise(across(all_of(soil_indices), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"))
+  
+  # ---- compute DOY of maximum rate of change within the window ----
+  soil_doys <- lapply(soil_indices, function(idx) {
+    vals <- df_window[[idx]]
+    if (all(is.na(vals))) return(NA)  # skip if missing
+    rate <- diff(vals) / diff(df_window$DOY)  # approximate derivative
+    max_doy <- df_window$DOY[-1][which.max(abs(rate))]  # DOY where max change occurs
+    return(max_doy)
+  }) %>%
+    setNames(paste0("DOY_maxROC_", soil_indices)) %>%
+    as_tibble()
+  
+  # ---- weather cumulative + soil averages ----
+  df_summary <- df_window %>%
+    dplyr::summarise(
+      cum_tmean     = sum(tmean, na.rm = TRUE),
+      cum_gdd       = sum(gdd, na.rm = TRUE),
+      cum_meansrad  = sum(srad, na.rm = TRUE),
+      cumkNDVI       = sum(kNDVI, na.rm = TRUE),
+      cumRNDVI      = sum(Lai, na.rm = TRUE),
+      cum_vpd       = sum(vpd, na.rm = TRUE),
+      cum_tmin      = sum(tmin, na.rm = TRUE),
+      cum_tmax      = sum(tmax, na.rm = TRUE),
+      cum_RH        = sum(avgRH, na.rm = TRUE),
+      cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
+      avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
+      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE)
+    ) %>%
+    dplyr::mutate(
+      Field_ID = field_id,
+      DOY_max_fit = doy_max
+    ) %>%
+    dplyr::select(Field_ID, DOY_max_fit, everything()) %>%
+    bind_cols(soil_means, soil_doys) %>%  # attach soil stats
+    as_tibble()
+  
+  return(df_summary)
+})
+
+meteo_summary_df_sos <- bind_rows(meteo_summary_list_sos)
+meteo_summary_df_sos <- meteo_summary_df_sos %>%
+  mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
+  rename(Field_Year = Field_ID)
+
+meteo_summary_df_sos
+
+
+#--------------------------------------
+#----------------------UD ANALYSIS------
+#-------------------------------------
+hist(phenology_df$UD.UD)
+hist(phenology_df$SOS_trs.sos)
+# Calculate row-wise mean of UD.UD and SOS_trs.sos
+row_mean <- rowMeans(phenology_df[, c("UD.UD", "SOS_trs.sos")], na.rm = TRUE)
+
+# Plot histogram
+hist(row_mean, 
+     main = "Histogram of Row-wise Mean of UD.UD and SOS_trs.sos",
+     xlab = "Mean Value",
+     col = "lightblue",
+     border = "black")
+
+# Print Field_Year values where UD.UD < 80
+# Fields where UD.UD < 80
+fields_under_80 <- phenology_df$Field_Year[phenology_df$UD.UD < 100]
+
+# Loop through each field and plot DOY vs kNDVI
+for (field_name in fields_under_80) {
+  # Extract data
+  df <- merged_list[[field_name]]
+  
+  # Create plot
+  plot(df$DOY, df$kNDVI, type = "l", col = "blue",
+       main = paste("kNDVI vs DOY for", field_name),
+       xlab = "DOY", ylab = "kNDVI")
+  
+  # Optional: pause between plots to view them one by one
+  readline(prompt = "Press [enter] to see the next plot")
+}
+
+library(ggplot2)
+library(patchwork)  # or library(cowplot)
+
+# Fields where UD.UD < 80
+fields_under_80 <- phenology_df$Field_Year[phenology_df$UD.UD < 80]
+
+phenology_df[phenology_df$UD.UD < 80, ]
+library(ggplot2)
+library(patchwork)
+
+# Fields where UD.UD < 80
+fields_under_80 <- phenology_df$Field_Year[phenology_df$UD.UD < 80]
+
+# Create a list to store ggplot objects with UD.UD annotation
+plot_list <- lapply(fields_under_80, function(field_name) {
+  df <- merged_list[[field_name]]
+  
+  # Get the UD.UD value for this field
+  ud_value <- phenology_df$UD.UD[phenology_df$Field_Year == field_name]
+  
+  ggplot(df, aes(x = DOY, y = kNDVI)) +
+    geom_point(color = "blue") +
+    ggtitle(field_name) +
+    theme_minimal() +
+    xlab("DOY") +
+    ylab("kNDVI") +
+    annotate("text", x = max(df$DOY) * 0.8, y = max(df$kNDVI), 
+             label = paste0("UD.UD = ", ud_value), 
+             hjust = 0, vjust = 1, color = "red", size = 4)
+})
+
+# Combine all plots in a grid
+combined_plot <- wrap_plots(plot_list, ncol = 2)  # Adjust ncol as needed
+combined_plot
+
+
+# Combine all plots in a grid
+combined_plot <- wrap_plots(plot_list, ncol = 2)  # Adjust ncol as needed
+combined_plot
+
+
+
+#-------------------------
+#VI value at SOS
+#---------------------------
+# Calculate time for each row
+df$Time_to_SOS <- ifelse(!is.na(df$kNDVISOSderiv) & !is.na(df$rsp.rsp) & df$rsp.rsp != 0,
+                         df$kNDVISOSderiv / df$rsp.rsp,
+                         NA)
+df$Time_to_zero <- ifelse(!is.na(df$kNDVISOSderiv) & !is.na(df$rsp.rsp) & df$rsp.rsp != 0,
+                          df$kNDVISOSderiv / (df$rsp.rsp/5),
+                          NA)
+# Check result
+head(df[, c("kNDVISOSderiv", "rsp.rsp", "Time_to_SOS")])
+
+df$PDDOYSOS<-df$SOS_deriv.sos-df$Time_to_zero
+# Ensure there are no NAs
+df_plot <- df %>% dplyr::filter(!is.na(SOS_deriv.sos), !is.na(PDDOYSOS))
+
+# Calculate metrics
+r2_val <- cor(df_plot$PDDOY, df_plot$PDDOYSOS)^2
+mae_val <- Metrics::mae(df_plot$PDDOY, df_plot$PDDOYSOS)
+
+# Create ggplot
+ggplot(df_plot, aes(x = PDDOY, y = PDDOYSOS)) +
+  geom_point(color = "blue", size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +  # 1:1 line
+  labs(
+    x = "Observed PDDOY",
+    y = "Predicted PDDOYSOS",
+    title = "Observed vs Predicted SOS Days"
+  ) +
+  annotate("text", 
+           x = min(df_plot$PDDOY, na.rm = TRUE) + 5, 
+           y = max(df_plot$PDDOYSOS, na.rm = TRUE) - 5,
+           label = paste0("R² = ", round(r2_val, 2), "\nMAE = ", round(mae_val, 2)),
+           hjust = 0, vjust = 1, size = 5, color = "black") +
+  theme_minimal(base_size = 14)
+
+
+#------------------------------------------------------------------------------
+#phenofit
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
+
+# Simplified, non-parallel version — no progressr or futures
+library(phenofit)
+library(dplyr)
+library(purrr)
+
+start_time <- Sys.time()
+
+extract_phenology <- function(vi) {
+  cat("Processing:", vi$Field_Year[1], "\n")  # simple progress message
+  dates <- as.Date(vi$Date)
+  ndvi  <- vi$kNDVI
+  
+  if (all(is.na(ndvi)) || length(ndvi) < 5) return(NULL)
+  
+  t <- as.numeric(format(dates, "%j"))
+  tout <- 1:300
+  methods <- c("AG", "Beck", "Elmore", "Gu", "Zhang")
+  
+  fit <- tryCatch({
+    curvefit(ndvi, t, tout, methods)
+  }, error = function(e) {
+    message("Curvefit error in ", vi$Field_Year[1], ": ", e$message)
+    return(NULL)
+  })
+  
+  if (is.null(fit) || is.null(fit$model$AG)) return(NULL)
+  x <- fit$model$AG
+  
+  safe_extract <- function(f, x) tryCatch(f(x), error = function(e) NA)
+  trs <- safe_extract(PhenoTrs, x)
+  der <- safe_extract(PhenoDeriv, x)
+  gu  <- safe_extract(PhenoGu, x)
+  kl  <- safe_extract(PhenoKl, x)
+  
+  params <- tryCatch(x$par["nlminb", ], error = function(e) rep(NA, 7))
+  
+  phenology_row <- c(
+    Model        = "AG",
+    SOS_trs      = trs["sos"],
+    EOS_trs      = trs["eos"],
+    SOS_deriv    = der["sos"],
+    POS          = der["pos"],
+    EOS_deriv    = der["eos"],
+    UD           = gu["UD"],
+    SD           = gu["SD"],
+    DD           = gu["DD"],
+    RD           = gu["RD"],
+    Greenup      = kl["Greenup"],
+    Maturity     = kl["Maturity"],
+    Senescence   = kl["Senescence"],
+    Dormancy     = kl["Dormancy"],
+    t0           = params["t0"],
+    mn           = params["mn"],
+    mx           = params["mx"],
+    rsp          = params["rsp"],
+    a3           = params["a3"],
+    rau          = params["rau"],
+    a5           = params["a5"]
+  )
+  
+  df <- as.data.frame(t(phenology_row), stringsAsFactors = FALSE)
+  df[ , -1] <- lapply(df[ , -1], as.numeric)
+  
+  df$PDDOY      <- vi$PDDOY[1]
+  df$HDDOY      <- vi$HDDOY[1]
+  df$Field_Year <- vi$Field_Year[1]
+  
+  return(df)
+}
+
+# Run sequentially
+phenology_list <- map(vi_list_gt20, extract_phenology)
+
+end_time <- Sys.time()
+cat("Time taken:", end_time - start_time, "\n")
+
+# Combine all non-null results
+phenology_df <- bind_rows(phenology_list)
+
+
 #------------------------------------------------------------------------------
+#----------OLD 
+#---------------------------------
 #------------------------------------------------------------------------------
 
 # Keep only top20_rfe + response variable
@@ -517,14 +920,14 @@ df_planting <- df %>%
     #cum_vpd, 
     cum_tmin, 
     cum_tmax, cum_soiltemp, cum_RH,
- mean_ExG  ,mean_MCARI1    ,mean_MTVI1 ,  mean_OSAVI  ,
-   mean_TGI ,    mean_AWEInsh 
+    mean_ExG  ,mean_MCARI1    ,mean_MTVI1 ,  mean_OSAVI  ,
+    mean_TGI ,    mean_AWEInsh 
   ) %>%
   dplyr::filter(!is.na(PDDOY)) %>%
   drop_na()
 
 # 2. Create train-test split (80:20)
-  set.seed(11)
+set.seed(11)
 n <- nrow(df_planting)
 train_idx <- sample(1:n, size = 0.8 * n)
 train <- df_planting[train_idx, ]
@@ -690,8 +1093,8 @@ df_harvest <- dfharvest %>%
     avgsoilclay, avgsoilorg, 
     # --- Commented out variables ---
     #lagobserved,
-     POS.pos,
-     #cumGDVI,
+    POS.pos,
+    #cumGDVI,
     #Laglocalmaxglomax, Laglocalminglomax, Laglocalmaxlocalmin,
     #cum_gdd, 
     cum_meansrad, 
@@ -771,131 +1174,3 @@ ggplot(df_planting, aes(x = DOY_min_fit, y = PDDOY, color = meansrad_M5)) +
 
 
 df_planting$meansrad_M5
-
-#######################################################
-#Phenology data check
-# 10 smallest values ignoring NA
-head(sort(phenology_df$Dormancy.Dormancy, na.last = NA), 20)
-# Get indices of 10 smallest UD.UD values ignoring NA
-idx <- order(phenology_df$Greenup.Greenup, na.last = NA)[1:20]
-
-# Extract corresponding Field_Year values
-phenology_df$Field_Year[idx]
-
-#problems F_8252_7_HF_2015, F_8320_66_6_2020, F_20578_65_Wg_N_2021
-
-#------------------------------------------------------------------------------------------
-#### Create another meteo for Residual plots of SOS
-#------------------------------------------------------------------------------------------
-
-merged_list_sos <- merged_list[names(merged_list) != "Pond_South_2023"]
-phenology_df$SOS_trs.sos
-merged_list_sos <- lapply(merged_list_sos, function(df) {  # Make sure Field_Year exists in both
-  if("Field_Year" %in% colnames(df)) {
-    df <- df %>%   # Join phenology_df columns UD.UD and DD.DD by Field_Year
-      left_join(
-        phenology_df %>% select(Field_Year, SOS_trs.sos, DD.DD),
-        by = "Field_Year"
-      )
-  }
-  return(df)
-})
-# Check if SOS_trs.sos and DD.DD exist in each dataframe inside merged_list_sos
-check_cols <- lapply(names(merged_list_sos), function(field_id) {
-  df <- merged_list_sos[[field_id]]
-  cols <- colnames(df)
-  
-  list(
-    Field_ID = field_id,
-    has_SOS_trs.sos = "SOS_trs.sos" %in% cols,
-    has_DD = "DD.DD" %in% cols
-  )
-})
-
-# Convert to data frame for easier viewing
-check_cols_df <- do.call(rbind, lapply(check_cols, as.data.frame))
-print(check_cols_df)
-# list of soil indices
-soil_indices <- c("AFRI1600", "AFRI2100", "ARVI", "ATSAVI", "BCC", "BNDVI", "BWDRVI", "CIG", "CVI",
-                  "DSI", "DSWI1", "DSWI2", "DSWI3", "DSWI4", "DSWI5", "DVI",
-                  "ENDVI", "EVI", "EVI2", "EVIv", "ExG", "ExGR", "ExR","FCVI", 
-                  "GARI", "GBNDVI", "GCC", "GDVI", "GEMI", "GLI", "GNDVI", "GOSAVI", "GRNDVI", "GRVI", "GSAVI", 
-                  "GVMI","IAVI", "IKAW", "IPVI",
-                  "MCARI1", "MCARI2", "MGRVI", "MNDVI", "MNLI", "MRBVI", "MSAVI", "MSI", "MSR", "MTVI1", "MTVI2",
-                  "NDDI",  "NDII", "NDMI", "NDPI", "NDVI", "NDYI", "NGRDI", "NIRv", 
-                  "NLI", "NMDI", "NRFIg", "NRFIr", "NormG", "NormNIR", "NormR", 
-                  "OCVI", "OSAVI", "RCC", "RDVI", "RGBVI", "RGRI", "RI",
-                  "SARVI", "SAVI", "SAVI2", "SEVI", "SI",  "SLAVI", "SR", "SR2", 
-                  "TDVI", "TGI", "TSAVI", "TVI", "TriVI", "VARI", "VIG", "WDRVI", "WDVI",
-                  "bNIRv", "sNIRvLSWI", "sNIRvNDPI", "sNIRvNDVILSWIP", "sNIRvNDVILSWIS", "sNIRvSWIR",
-                  "ANDWI", "AWEInsh", "AWEIsh",  "LSWI", "MBWI", "MLSWI26", "MLSWI27", "MNDWI", "MuWIR", 
-                  "NDPonI", "NDTI", "NDVIMNDWI", "NDWI", "NDWIns", "NWI", "OSI", "PI",
-                  "RNDVI", "SWM", "WI1", "WI2", "WI2015", "WRI", "BI", "BITM", "BIXS",
-                  "BaI", "DBSI", "EMBI", "MBI", "NDSoI", "NSDS", "NSDSI1", "NSDSI2", "NSDSI3",
-                  "RI4XS", "kIPVI", "kNDVI", "kRVI", "nir")
-# Remove "Dewitt_2_2023" from merged_list_sos
-merged_list_sos[["Dewitt_2_2023"]] <- NULL
-meteo_summary_list_sos <- lapply(names(merged_list_sos), function(field_id) {
-  df <- merged_list_sos[[field_id]]
-  df$Date <- as.Date(df$Date)
-  df$DOY <- yday(df$Date)
-  # Get DOY_max_fit from the same dataframe
-  doy_max <- unique(df$SOS_trs.sos)
-  if(length(doy_max) != 1 || is.na(doy_max)) {
-    doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
-  }
-  # Define 45-day window
-  start_doy <- doy_max - 45
-  end_doy <- doy_max
-  df_window <- df %>%
-    dplyr::filter(DOY >= start_doy & DOY <= end_doy)
-  
-  # ---- compute soil index means within the window ----
-  soil_means <- df_window %>%
-    dplyr::summarise(across(all_of(soil_indices), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"))
-  
-  # ---- compute DOY of maximum rate of change within the window ----
-  soil_doys <- lapply(soil_indices, function(idx) {
-    vals <- df_window[[idx]]
-    if (all(is.na(vals))) return(NA)  # skip if missing
-    rate <- diff(vals) / diff(df_window$DOY)  # approximate derivative
-    max_doy <- df_window$DOY[-1][which.max(abs(rate))]  # DOY where max change occurs
-    return(max_doy)
-  }) %>%
-    setNames(paste0("DOY_maxROC_", soil_indices)) %>%
-    as_tibble()
-  
-  # ---- weather cumulative + soil averages ----
-  df_summary <- df_window %>%
-    dplyr::summarise(
-      cum_tmean     = sum(tmean, na.rm = TRUE),
-      cum_gdd       = sum(gdd, na.rm = TRUE),
-      cum_meansrad  = sum(srad, na.rm = TRUE),
-      cumkNDVI       = sum(kNDVI, na.rm = TRUE),
-      cumRNDVI      = sum(Lai, na.rm = TRUE),
-      cum_vpd       = sum(vpd, na.rm = TRUE),
-      cum_tmin      = sum(tmin, na.rm = TRUE),
-      cum_tmax      = sum(tmax, na.rm = TRUE),
-      cum_RH        = sum(avgRH, na.rm = TRUE),
-      cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
-      avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
-      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE)
-    ) %>%
-    dplyr::mutate(
-      Field_ID = field_id,
-      DOY_max_fit = doy_max
-    ) %>%
-    dplyr::select(Field_ID, DOY_max_fit, everything()) %>%
-    bind_cols(soil_means, soil_doys) %>%  # attach soil stats
-    as_tibble()
-  
-  return(df_summary)
-})
-
-meteo_summary_df_sos <- bind_rows(meteo_summary_list_sos)
-meteo_summary_df_sos <- meteo_summary_df_sos %>%
-  mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
-  rename(Field_Year = Field_ID)
-
-meteo_summary_df_sos
-

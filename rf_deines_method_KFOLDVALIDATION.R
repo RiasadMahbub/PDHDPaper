@@ -153,7 +153,7 @@ sapply(train_set_harvest, class)
 # === Show Plots ===
 # Plot data for Harvest
 plot1_df_harvest_deines <- tibble(
-  Metric = rep(c("RMSE (DOY)", "MAE (DOY)"), each = 3),
+  Metric = rep(c("RMSE (day)", "MAE (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_harvest$Train_RMSE_mean,
             summary_metrics_harvest$Val_RMSE_mean,
@@ -170,7 +170,7 @@ plot1_df_harvest_deines <- tibble(
 )
 
 plot2_df_harvest_deines <- tibble(
-  Metric = rep(c("R²", "Bias (DOY)"), each = 3),
+  Metric = rep(c("R²", "Bias (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_harvest$Train_R2_mean,
             summary_metrics_harvest$Val_R2_mean,
@@ -186,20 +186,41 @@ plot2_df_harvest_deines <- tibble(
          NA)
 )
 
-# === Plot 1: RMSE and MAE for Harvest ===
+# Filter Bias and R² separately
+plot2_bias_df_harvest <- plot2_df_harvest_deines %>%
+  dplyr::filter(Metric == "Bias (day)")
+
+plot3_r2_df_harvest <- plot2_df_harvest_deines %>%
+  dplyr::filter(Metric == "R²")
+
+# Ensure Dataset factor order
+plot1_df_harvest_deines$Dataset <- factor(plot1_df_harvest_deines$Dataset,
+                                          levels = c("Train", "Validation", "Test"))
+plot2_bias_df_harvest$Dataset <- factor(plot2_bias_df_harvest$Dataset,
+                                        levels = c("Train", "Validation", "Test"))
+plot3_r2_df_harvest$Dataset <- factor(plot3_r2_df_harvest$Dataset,
+                                      levels = c("Train", "Validation", "Test"))
+
+# Van Gogh colors
+library(vangogh)
+vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
+vg_colors <- vvg_colors[c(1,3,5)]
+
+
+# ----------------------------
+# Plot 1: RMSE and MAE
+# ----------------------------
 p1_harvest_deines <- ggplot(plot1_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
+                position = position_dodge(width = 0.7), width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
             position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
+            vjust = -0.8, size = 4.5) +
   labs(title = "Harvesting: RMSE and MAE", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = vg_colors) +
   theme_minimal(base_size = 14) +
   theme(
     axis.title.x = element_text(size = 16),
@@ -209,32 +230,102 @@ p1_harvest_deines <- ggplot(plot1_df_harvest_deines, aes(x = Metric, y = Value, 
     plot.title = element_text(size = 18, face = "bold")
   )
 
-# === Plot 2: R² and Bias for Harvest ===
-p2_harvest_deines <- ggplot(plot2_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+# ----------------------------
+# Plot 2: Bias
+# ----------------------------
+p2_harvest_deines <- ggplot(plot2_bias_df_harvest, aes(x = Dataset, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+            vjust = -0.8, size = 4.5) +
+  labs(y = "Bias (day)", x = "") +
+  scale_fill_manual(values = vg_colors) +
   theme_minimal(base_size = 14) +
   theme(
-    axis.title.x = element_text(size = 16),
     axis.title.y = element_text(size = 16),
     axis.text.x = element_text(size = 14),
     axis.text.y = element_text(size = 14),
     plot.title = element_text(size = 18, face = "bold")
   )
 
-# === Show Plots for Harvest ===
+# ----------------------------
+# Plot 3: R²
+# ----------------------------
+p3_harvest_deines <- ggplot(plot3_r2_df_harvest, aes(x = Dataset, y = Value, fill = Dataset)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
+  geom_text(aes(label = ifelse(is.na(SD),
+                               sprintf("%.2f", Value),
+                               sprintf("%.2f ± %.2f", Value, SD))),
+            vjust = -0.8, size = 4.5) +
+  labs(y = "R²", x = "") +
+  scale_fill_manual(values = vg_colors) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    plot.title = element_text(size = 18, face = "bold")
+  )
+
+# ----------------------------
+# Show Plots
+# ----------------------------
 print(p1_harvest_deines)
+print(p3_harvest_deines)
 print(p2_harvest_deines)
+
+# # === Plot 1: RMSE and MAE for Harvest ===
+# p1_harvest_deines <- ggplot(plot1_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Harvesting: RMSE and MAE", y = "Error", x = "Metric") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# 
+# # === Plot 2: R² and Bias for Harvest ===
+# p2_harvest_deines <- ggplot(plot2_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# 
+# # === Show Plots for Harvest ===
+# print(p1_harvest_deines)
+# print(p2_harvest_deines)
 
 # === Save Plots as JPEG for Harvest ===
 ggsave(
@@ -496,9 +587,12 @@ planting_var_imp_summary %>%
 # Check training set column types
 sapply(train_set_planting, class)
 
+#----------------------------
+#Prepare Planting Data
+#----------------------------
 # === RMSE & MAE (with Test) for Planting ===
 plot1_df_planting_deines <- tibble(
-  Metric = rep(c("RMSE (DOY)", "MAE (DOY)"), each = 3),
+  Metric = rep(c("RMSE (day)", "MAE (day)"), each = 3),
   Dataset = rep(c("Train", "Validation", "Test"), times = 2),
   Value = c(summary_metrics_planting$Train_RMSE_mean,
             summary_metrics_planting$Val_RMSE_mean,
@@ -531,21 +625,40 @@ plot2_df_planting_deines <- tibble(
          summary_metrics_planting$Val_Bias_sd,
          NA)
 )
+# Filter Bias and R² separately
+plot2_bias_df_planting <- plot2_df_planting_deines %>%
+  dplyr::filter(Metric == "Bias")
 
-# === Plot 1: RMSE and MAE for Planting ===
+plot3_r2_df_planting <- plot2_df_planting_deines %>%
+  dplyr::filter(Metric == "R²")
+
+# Ensure Dataset factor order
+plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset,
+                                           levels = c("Train", "Validation", "Test"))
+plot2_bias_df_planting$Dataset <- factor(plot2_bias_df_planting$Dataset,
+                                         levels = c("Train", "Validation", "Test"))
+plot3_r2_df_planting$Dataset <- factor(plot3_r2_df_planting$Dataset,
+                                       levels = c("Train", "Validation", "Test"))
+
+# Van Gogh colors
+library(vangogh)
+vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
+vg_colors <- vvg_colors[c(1,3,5)]
+
+# ----------------------------
+# Plot 1: RMSE and MAE
+# ----------------------------
 p1_planting_deines <- ggplot(plot1_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
+                position = position_dodge(width = 0.7), width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
             position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
+            vjust = -0.8, size = 4.5) +
   labs(title = "Planting: RMSE and MAE", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = vg_colors) +
   theme_minimal(base_size = 14) +
   theme(
     axis.title.x = element_text(size = 16),
@@ -555,32 +668,54 @@ p1_planting_deines <- ggplot(plot1_df_planting_deines, aes(x = Metric, y = Value
     plot.title = element_text(size = 18, face = "bold")
   )
 
-# === Plot 2: R² and Bias for Planting ===
-p2_planting_deines <- ggplot(plot2_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+# ----------------------------
+# Plot 2: Bias
+# ----------------------------
+p2_planting_deines <- ggplot(plot2_bias_df_planting, aes(x = Dataset, y = Value, fill = Dataset)) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
   geom_text(aes(label = ifelse(is.na(SD),
                                sprintf("%.2f", Value),
                                sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Planting: R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
+            vjust = -0.8, size = 4.5) +
+  labs(y = "Bias (day)", x = "") +
+  scale_fill_manual(values = vg_colors) +
   theme_minimal(base_size = 14) +
   theme(
-    axis.title.x = element_text(size = 16),
     axis.title.y = element_text(size = 16),
     axis.text.x = element_text(size = 14),
     axis.text.y = element_text(size = 14),
     plot.title = element_text(size = 18, face = "bold")
   )
 
-# === Show Plots for Planting ===
+# ----------------------------
+# Plot 3: R²
+# ----------------------------
+p3_planting_deines <- ggplot(plot3_r2_df_planting, aes(x = Dataset, y = Value, fill = Dataset)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
+  geom_text(aes(label = ifelse(is.na(SD),
+                               sprintf("%.2f", Value),
+                               sprintf("%.2f ± %.2f", Value, SD))),
+            vjust = -0.8, size = 4.5) +
+  labs(y = "R²", x = "") +
+  scale_fill_manual(values = vg_colors) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    plot.title = element_text(size = 18, face = "bold")
+  )
+
+# ----------------------------
+# Show Plots
+# ----------------------------
 print(p1_planting_deines)
+print(p3_planting_deines)
 print(p2_planting_deines)
+
+
 
 # === Save Plots as JPEG for Planting ===
 ggsave(
@@ -602,6 +737,37 @@ ggsave(
   height = 6,
   units = "in"
 )
+
+
+#---------------------------------------
+# Predict PDDOY for the original df_planting
+#---------------------------------------
+# Remove Field_ID for prediction
+# Remove Field_ID before training final model
+final_model_planting <- randomForest::randomForest(
+  PDDOY ~ ., 
+  data = remaining_df_planting %>% dplyr::select(-Field_ID),
+  ntree = 100
+)
+
+# Predict on df_planting (remove Field_ID)
+df_planting$PDDeines <- predict(final_model_planting, newdata = df_planting %>% dplyr::select(-Field_ID))
+df_planting$PDDeines <- predict(final_model_planting, newdata = df_planting)
+df_planting_deines_residual <- df_planting %>%
+  dplyr::mutate(residual_PDDeines = PDDeines - PDDOY)
+
+#---------------------------------------
+# Create new dataframe for residuals
+#---------------------------------------
+df_planting_deines_residual <- df_planting %>%
+  dplyr::mutate(
+    residual_PDDeines = PDDeines - PDDOY
+  )
+
+#---------------------------------------
+# Preview
+#---------------------------------------
+head(df_planting_deines_residual)
 
 
 #========================================================
@@ -732,101 +898,3 @@ ggsave(
   height = 8,
   units = "in"
 )
-
-#========================================================
-# 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (HARVESTING)
-#========================================================
-# Get the top 15 features for Harvesting based on Total_scaled importance
-top_15_harvest_features <- harvest_importance_combined %>%
-  arrange(desc(Total_scaled)) %>%
-  head(15) %>%
-  pull(variable)
-
-# Loop through the top 15 features and create scatter plots
-for (feature in top_15_harvest_features) {
-  # Create a data frame for plotting (using combined_df as the source)
-  plot_data <- combined_df %>%
-    dplyr::select(!!sym(feature), HDDOY) %>%
-    drop_na() # Ensure no NAs in the selected columns for plotting
-  
-  p <- ggplot(plot_data, aes_string(x = feature, y = "HDDOY")) +
-    geom_point(alpha = 0.6, color = "#3C5488FF") +
-    geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
-    labs(
-      title = paste("Harvesting: HDDOY vs.", feature),
-      x = feature,
-      y = "HDDOY"
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title.x = element_text(size = 14),
-      axis.title.y = element_text(size = 14)
-    )
-  
-  print(p)
-  
-  # Save the plot
-  ggsave(
-    filename = paste0("Deinesharvesting_HDDOY_vs_", feature, ".jpeg"),
-    plot = p,
-    path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
-    dpi = 300,
-    width = 8,
-    height = 6,
-    units = "in"
-  )
-}
-
-
-#========================================================
-# 7. PLOT TOP 15 FEATURES VS. TARGET VARIABLE (PLANTING)
-#========================================================
-# Get the top 15 features for Planting based on Total_scaled importance
-top_15_planting_features <- planting_importance_combined %>%
-  arrange(desc(Total_scaled)) %>%
-  head(15) %>%
-  pull(Variable) # Note: 'Variable' column name for planting_importance_combined
-
-# Loop through the top 15 features and create scatter plots
-for (feature in top_15_planting_features) {
-  # Create a data frame for plotting (using combined_df as the source)
-  plot_data <- combined_df %>%
-    dplyr::select(!!sym(feature), PDDOY) %>%
-    drop_na() # Ensure no NAs in the selected columns for plotting
-  
-  # Fit a linear model to get the R-squared value
-  lm_model <- lm(as.formula(paste("PDDOY ~", feature)), data = plot_data)
-  r_squared <- summary(lm_model)$r.squared
-  
-  p <- ggplot(plot_data, aes_string(x = feature, y = "PDDOY")) +
-    geom_point(alpha = 0.6, color = "#00A087FF") +
-    geom_smooth(method = "lm", se = FALSE, color = "#DC0000FF") + # Add a linear regression line
-    labs(
-      title = paste0("Planting: PDDOY vs. ", feature, " (R² = ", sprintf("%.2f", r_squared), ")"), # Add R-squared to title
-      x = feature,
-      y = "PDDOY"
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title.x = element_text(size = 14),
-      axis.title.y = element_text(size = 14)
-    )
-  
-  print(p)
-  
-  # Save the plot
-  ggsave(
-    filename = paste0("planting_PDDOY_vs_", feature, ".jpeg"),
-    plot = p,
-    path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
-    dpi = 300,
-    width = 8,
-    height = 6,
-    units = "in"
-  )
-}
-
-
-

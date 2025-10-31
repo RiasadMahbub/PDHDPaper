@@ -215,47 +215,77 @@ library(ggplot2)
 
 # Filter valid rows and select the initial set of variables for modeling.
 # The `select()` function is used to include all potential predictors and the response.
-df_harvest <- df %>%
+
+
+
+df_harvest <- dfharvest %>%
   dplyr::select(
-    a1, 
-    UD.UD, 
-    DOY_min_fit, 
-    #Greenup.Greenup, 
-    DOY_min_fit,
-    SOS_trs.sos, 
-    a2, 
-    Dormancy.Dormancy, 
-    RD.RD, 
-    EOS_trs.eos, 
-    DOY_max_before_min_fit, 
-    DD.DD, 
-    b1, 
-    mx.mx, 
+    # --- Top 20 RFE variables ---
+    EOS_trs.eos, RD.RD, 
+    #Dormancy.Dormancy, 
     EOS_deriv.eos, 
-    SOS_deriv.sos, 
-    #lagtrsgreenup, 
-    #Senescence.Senescence, 
-    rsp.rsp, 
-    lagtrsupdate, 
-    a3.a3,
-    
-    # --- Response variable ---
-    HDDOY, 
-    avgsoilclay, avgsoilorg, 
-    # --- Commented out variables ---
+    cum_meansrad, UD.UD, a2, DD.DD, 
+    SOS_trs.sos, SOS_deriv.sos,
+    avgsoilorg, cum_vpd, cum_gdd, cum_RH, 
+    b1,
+    avgsoilclay, cum_soiltemp, 
+    cum_tmin, DOY_max_before_min_fit, cum_tmax, 
+    a1, 
+    lagtrsupdate,
+    DOY_min_fit, rsp.rsp, 
     POS.pos,
-    cumGDVI,
-    #Laglocalmaxglomax, Laglocalminglomax, Laglocalmaxlocalmin,
-    cum_gdd, 
-    cum_meansrad, 
-    cum_vpd, 
-    cum_tmin, 
-    DOY_maxROC_IAVI, DOY_maxROC_MSI, DOY_maxROC_TGI,DOY_maxROC_ExGR,
-    #DOY_maxROC_DSI, 
-    DOY_maxROC_EVI,  DOY_maxROC_IAVI,  DOY_maxROC_MSI,
-    DOY_maxROC_ExGR,DOY_maxROC_MRBVI,
-    DOY_maxROC_NMDI,
-    cum_tmax, cum_soiltemp, cum_RH
+    mx.mx, a3.a3,
+    #DOY_maxROC_sNIRvNDVILSWIS,DOY_maxROC_ExG, DOY_maxROC_NMDI,DOY_maxROC_EVI, 
+    
+    Laglocalmaxglomax,Laglocalminglomax, Laglocalmaxlocalmin, DOY_max_before_min_fit,
+    
+    #--- Additional features to include ---
+    # mean_AFRI1600, mean_AFRI2100, mean_DSI, mean_DSWI5, mean_ExGR,
+    # mean_GVMI, mean_MNDVI, mean_MNLI, mean_MSI, mean_NDII,
+    # mean_NDMI, mean_NDPI, mean_NDVI, mean_NRFIg, mean_NRFIr,
+    # mean_SLAVI, mean_sNIRvLSWI, mean_sNIRvNDPI, mean_sNIRvNDVILSWIP, mean_sNIRvNDVILSWIS,
+    # mean_sNIRvSWIR, mean_LSWI, mean_MBWI, mean_MLSWI27, mean_WI1,
+    # mean_WI2015, mean_BaI, mean_NDSoI, mean_NSDS, mean_NSDSI2,
+    # mean_NSDSI3, mean_kIPVI, mean_kNDVI,
+    cum_meansrad_PD,
+    cum_soiltemp_PD,
+    cum_tmin_PD,
+    cum_tmax_PD,
+    cum_tmean_PD,
+    cum_gdd_PD,
+    cum_vpd_PD,
+    cum_RH_PD,
+    cumGDVI_PD,
+    cumRNDVI_PD,
+    cumkNDVI_PD,
+
+    HDDOY
+  ) %>%
+  dplyr::filter(!is.na(HDDOY)) %>% # Remove rows where the response is missing
+  drop_na() # This removes any row with missing values in the selected columns
+
+df_harvest <- dfharvest %>%
+  dplyr::select(
+    EOS_trs.eos, RD.RD, 
+    #Dormancy.Dormancy, 
+    EOS_deriv.eos, 
+    cum_meansrad, UD.UD, a2, DD.DD, 
+    SOS_trs.sos, SOS_deriv.sos,
+    avgsoilorg, cum_vpd, cum_gdd, cum_RH, 
+    b1,
+    avgsoilclay, cum_soiltemp, 
+    cum_tmin, DOY_max_before_min_fit, cum_tmax, 
+    a1, 
+    lagtrsupdate,
+    DOY_min_fit, rsp.rsp, 
+    POS.pos,
+    mx.mx, a3.a3,
+    # DOY_maxROC_EVI, 
+    # DOY_maxROC_TGI,
+    # DOY_maxROC_ExGR,  DOY_maxROC_NMDI, 
+    # #DOY_maxROC_DSI,         #DSI and MSI is the same 
+    # DOY_maxROC_MSI , 
+    HDDOY
   ) %>%
   dplyr::filter(!is.na(HDDOY)) %>% # Remove rows where the response is missing
   drop_na() # This removes any row with missing values in the selected columns
@@ -340,4 +370,53 @@ test_results_optimal <- data.frame(
 
 cat("\n--- Final Model Test Results with RFE-Selected Features ---\n")
 print(test_results_optimal)
+
+
+#==============================================================================
+# 3. FEATURE SELECTION: Find Optimal Features with RFE (limit to 10 features)
+#==============================================================================
+cat("Starting Recursive Feature Elimination (RFE) to find the optimal feature subset (max 10 features)...\n")
+
+# Define the control parameters for RFE using repeated cross-validation.
+rfe_control <- rfeControl(
+  functions = rfFuncs,       # Use Random Forest functions
+  method = "repeatedcv",     # Use repeated cross-validation
+  number = 5,                # 5-fold cross-validation
+  repeats = 3,               # Repeat 3 times for stability
+  verbose = TRUE             # Print progress updates
+)
+
+# Set a seed for reproducibility
+set.seed(123)
+
+# Run the RFE process with a maximum of 10 features
+rfe_results_harvest <- rfe(
+  x = x_rfe,
+  y = y_rfe,
+  sizes = 2:min(10, ncol(x_rfe)),  # Only test subsets up to 10 features
+  rfeControl = rfe_control,
+  metric = "RMSE"
+)
+
+# Extract the optimal features from the RFE results
+optimal_features <- predictors(rfe_results_harvest)
+optimal_num_features <- rfe_results_harvest$bestSubset
+optimal_rmse_rfe <- min(rfe_results_harvest$results$RMSE)
+
+cat("\n--- RFE Results Summary ---\n")
+cat("Optimal Number of Features:", optimal_num_features, "\n")
+cat("Optimal Features Selected:\n", paste(optimal_features, collapse = ", "), "\n")
+cat("RMSE with Optimal Features (from CV):", round(optimal_rmse_rfe, 4), "\n")
+
+# Get all features ranked by importance
+all_features_ranked <- predictors(rfe_results_harvest)
+
+# Limit to 10 features maximum
+
+optimal_features <- head(all_features_ranked, 10)
+optimal_num_features <- length(optimal_features)
+
+cat("\n--- RFE Results Summary (Limited to 10 Features) ---\n")
+cat("Optimal Number of Features:", optimal_num_features, "\n")
+cat("Optimal Features Selected:\n", paste(optimal_features, collapse = ", "), "\n")
 

@@ -1,8 +1,8 @@
-
-# Add observed values from vi_list_gt20
-# PDDOY is assumed to be observed_SOS, HDDOY is observed_EOS
-sos_eos_df$observed_SOS <- sapply(vi_list_gt20, function(df) df$PDDOY[1])
-sos_eos_df$observed_EOS <- sapply(vi_list_gt20, function(df) df$HDDOY[1])
+# 
+# # Add observed values from vi_list_gt20
+# # PDDOY is assumed to be observed_SOS, HDDOY is observed_EOS
+# sos_eos_df$observed_SOS <- sapply(vi_list_gt20, function(df) df$PDDOY[1])
+# sos_eos_df$observed_EOS <- sapply(vi_list_gt20, function(df) df$HDDOY[1])
 
 # Handle missing values for observed_EOS (if "NULL" strings are present)
 sos_eos_df$observed_EOS[sos_eos_df$observed_EOS == "NULL"] <- NA
@@ -388,80 +388,3 @@ ggplot(data.frame(Mean_GDD_Lag = all_mean_gdd_lags), aes(x = Mean_GDD_Lag)) +
   ggtitle("Distribution of Mean GDD Lag Across 100 Training Runs") +
   theme_bw()
 #====================================================================================
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-
-# === RMSE & MAE ===
-plot1_df <- tibble(
-  Metric = rep(c("RMSE", "MAE"), each = 3),
-  Dataset = rep(c("Train", "Validation", "Test"), times = 2),
-  Value = c(summary_metrics_df$Train_RMSE_Mean,
-            summary_metrics_df$Val_RMSE_Mean,
-            summary_metrics_df$Test_RMSE,
-            summary_metrics_df$Train_MAE_Mean,
-            summary_metrics_df$Val_MAE_Mean,
-            summary_metrics_df$Test_MAE),
-  SD = c(summary_metrics_df$Train_RMSE_SD,
-         summary_metrics_df$Val_RMSE_SD,
-         NA,
-         summary_metrics_df$Train_MAE_SD,
-         summary_metrics_df$Val_MAE_SD,
-         NA)
-)
-
-# === R² & Bias ===
-plot2_df <- tibble(
-  Metric = rep(c("R²", "Bias"), each = 3),
-  Dataset = rep(c("Train", "Validation", "Test"), times = 2),
-  Value = c(summary_metrics_df$Train_R2_Mean,
-            summary_metrics_df$Val_R2_Mean,
-            summary_metrics_df$Test_R2,
-            summary_metrics_df$Train_Bias_Mean,
-            summary_metrics_df$Val_Bias_Mean,
-            summary_metrics_df$Test_Bias),
-  SD = c(summary_metrics_df$Train_R2_SD,
-         summary_metrics_df$Val_R2_SD,
-         NA,
-         summary_metrics_df$Train_Bias_SD,
-         summary_metrics_df$Val_Bias_SD,
-         NA)
-)
-
-# === Plot 1: RMSE and MAE ===
-p1 <- ggplot(plot1_df, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  labs(title = "RMSE and MAE (DOY)", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +  # Base font size
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
-
-# === Plot 2: R² and Bias ===
-p2 <- ggplot(plot2_df, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  labs(title = "R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
-
-# === Show Plots ===
-print(p1)
-print(p2)

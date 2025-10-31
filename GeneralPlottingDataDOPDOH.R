@@ -17,21 +17,18 @@ library(ggpubfigs)
 library(corrplot)
 library(RColorBrewer)
 library(patchwork)
-
+library(vangogh)
+library(phenofit)
+utils::browseURL(getwd())
 #==================================================================================
 #==================================================================================
 # Generated from 'OrganizeGroundData.R' - Planting day-of-year (PDDOY) distribution
-# Get first color from Zissou1 palette
-zissou_color <- wes_palette("Zissou1")[1]  # "#3B9AB2"
-
+zissou_color <- wes_palette("Zissou1")[1]  # "#3B9AB2"# Get first color from Zissou1 palette
 #==================================================================================
 #==================================================================================
 #Script: OrganizingHarvestDate and OrganizeGroundData.R
 # Generated from 'OrganizeGroundData.R' - Harvest day-of-year (HDDOY) distribution
-
-# Get 4th color from Zissou1 palette
-zissou_color4 <- wes_palette("Zissou1")[4]  # "#F21A00"
-
+zissou_color4 <- wes_palette("Zissou1")[4]  # "#F21A00"# Get 4th color from Zissou1 palette
 # Create the plot object
 p_hd <- ggplot(combined_data, aes(x = HDDOY)) +
   geom_histogram(binwidth = 5, color = "black", fill = zissou_color4, alpha = 0.7) +
@@ -44,8 +41,6 @@ p_hd <- ggplot(combined_data, aes(x = HDDOY)) +
   annotate("text", x = 210, y = 75, 
            label = paste0("N = ", sum(!is.na(combined_data$HDDOY))), 
            size = 5, color = zissou_color4)
-
-# Save the plot
 ggsave(
   filename = "harvest_date.png",
   plot = p_hd,
@@ -70,7 +65,6 @@ pd_hd_long <- pd_hd_long %>%
 # Assign colors from Wes Anderson Zissou1 palette
 zissou_colors <- wes_palette("Zissou1")
 color_map <- c(PD = zissou_colors[1], HD = zissou_colors[4])
-
 # Compute summary statistics including count (N)
 summary_stats <- pd_hd_long %>%
   group_by(Type) %>%
@@ -120,8 +114,7 @@ pdhdviolin <- ggplot(pd_hd_long, aes(x = Type, y = DOY, fill = Type)) +
     legend.key.size = unit(0.6, "cm")
   )
 
-
-
+pdhdviolin
 # Save the plot
 ggsave(
   filename = "pd_hd_violin_box.png",
@@ -131,13 +124,10 @@ ggsave(
   height = 5,
   dpi = 300
 )
-
 ##-----------------------------------------------------------------
 # Histogram of pd-doymax doymax-hd 
 ##-----------------------------------------------------------------
-
-# Assign colors from Wes Anderson Zissou1 palette
-zissou_colors <- wes_palette("Zissou1")
+zissou_colors <- wes_palette("Zissou1")# Assign colors from Wes Anderson Zissou1 palette
 color_map <- c(PDMaxdays = zissou_colors[1], HDMaxdays = zissou_colors[4])
 
 # Add PDMaxdays and HDMaxdays to df
@@ -202,7 +192,7 @@ p2 <- ggplot(df, aes(x = HDMaxdays)) +
 
 # Combine with A, B notation
 pdhddoymax <- p1 + p2 + plot_annotation(tag_levels = "A")
-
+pdhddoymax
 # Save the figure
 ggsave(
   filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/PD_HD_MaxDays_Hist.png",
@@ -211,57 +201,63 @@ ggsave(
   height = 6,
   dpi = 300
 )
-
 # ---------------------------
 # Growing Season length and Lag
 # ---------------------------
-# reshape into long format 
-df_long <- df %>% 
-  select(gsl, lagsosderpddoy, lagsostrspddoy, lagudpddoy) %>% 
-  pivot_longer( 
-    cols = c(lagsosderpddoy, lagsostrspddoy, lagudpddoy), 
-    names_to = "LagType", 
-    values_to = "LagValue" 
-  ) 
+# reshape into long format
+df_long <- df %>%
+  select(gsl, lagsosderpddoy, lagsostrspddoy, lagudpddoy) %>%
+  pivot_longer(
+    cols = c(lagsosderpddoy, lagsostrspddoy, lagudpddoy),
+    names_to = "LagType",
+    values_to = "LagValue"
+  )
 
-# clean legend labels 
-df_long$LagType <- factor(df_long$LagType, 
-                          levels = c("lagsosderpddoy", "lagsostrspddoy", "lagudpddoy"), 
-                          labels = c("Planting_SOSDeriv_Period", "Planting_SOSTRS_Period", 
-                                     "Planting_UD_Period")) 
+# clean legend labels - Use simple strings for the factor labels
+# The expressions will be applied later in scale_color_manual
+df_long$LagType <- factor(df_long$LagType,
+                          levels = c("lagsosderpddoy", "lagsostrspddoy", "lagudpddoy"),
+                          labels = c("lagsosderpddoy", "lagsostrspddoy", "lagudpddoy"))
 
 
-# use first 3 colors from GrandBudapest1 
-pal <- wes_palette("GrandBudapest1")[2:4] 
+# use first 3 colors from GrandBudapest1
+pal <- wes_palette("GrandBudapest1")[2:4]
 
-# plot 
-lagall <- ggplot(df_long, aes(x = LagValue, y = gsl, color = LagType)) + 
-  geom_point(alpha = 0.7, size = 3) + 
-  geom_smooth(method = "lm", se = FALSE, linewidth = 1) + 
-  stat_cor(aes(label = ..r.label..), method = "pearson", 
-           label.x.npc = "left", label.y.npc = "top", size = 5, show.legend = FALSE) + 
-  theme_classic(base_size = 12) + 
-  scale_color_manual(values = pal) +
+# Define the expressions for the legend labels once
+legend_labels <- c(
+  expression(italic("Duration_PD_SOS"["DER"])),
+  expression(italic("Duration_PD_SOS"["TRS"])),
+  expression(italic("Duration_PD_UD"))
+)
+# plot
+lagall <- ggplot(df_long, aes(x = LagValue, y = gsl, color = LagType)) +
+  geom_point(alpha = 0.7, size = 3) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  stat_cor(aes(label = after_stat(r.label)), method = "pearson",
+           label.x.npc = "left", label.y.npc = "top", size = 5, show.legend = FALSE) +
+  theme_classic(base_size = 12) +
+  scale_color_manual(
+    values = pal,
+    # APPLY THE EXPRESSION LABELS HERE for correct rendering
+    labels = legend_labels
+  ) +
   scale_x_continuous(breaks = seq(-40, max(df_long$LagValue, na.rm = TRUE), by = 20)) +
   scale_y_continuous(breaks = seq(0, max(df_long$gsl, na.rm = TRUE), by = 25)) +
   labs(
-    x = "Lag (days)", 
-    y = "Growing season length (HD–PD)", 
+    x = "Lag (days)",
+    y = "Growing season length (HD–PD)",
     color = NULL
   ) +
   theme(
-    axis.title = element_text(color = "black"), 
-    axis.text  = element_text(color = "black", size = 14),
-    legend.position = c(0.45, 0.87),  # x = 80% from left, y = 85% from bottom
+    axis.title = element_text(color = "black"),
+    axis.text = element_text(color = "black", size = 14),
+    legend.position = c(0.45, 0.87),
     legend.direction = "vertical",
-    legend.background = element_rect(fill = alpha('white', 0.5)), # semi-transparent bg
+    legend.background = element_rect(fill = alpha('white', 0.5)),
     legend.key.size = unit(0.8, "lines"),
-    legend.text = element_text(size = 12) 
+    legend.text = element_text(size = 12)
   )
-
-
 lagall
-
 # Save the plot to the specified file path
 ggsave(
   filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/laggsl.jpeg",
@@ -272,12 +268,9 @@ ggsave(
   dpi = 300        # Set the resolution for high-quality output
 )
 
-
 #--------------------------------------------------------------------
 #COMBINE VIOLING DOYMAX AND LAG GRAPH INTO ONE
 #--------------------------------------------------------------------
-
-
 # Combine plots in 2 rows x 2 columns
 combined_all <- (
   (pdhdviolin | lagall) /        # first row: two plots side by side
@@ -285,7 +278,7 @@ combined_all <- (
 ) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(size = 16, face = "bold"))
-
+combined_all
 # Save the combined figure
 ggsave(
   filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/combined_violin_lag_hist.png",
@@ -294,30 +287,27 @@ ggsave(
   height = 10,
   dpi = 300
 )
-
-
 #---------------------------------------------------------------------------------------
-# SAVE THE Field data of PD and HD
+#---------------------------------------------------------------------------------------
+# Field data of PD and HD
 #--------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 write.csv(
   combined_data,
   "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/combined_data.csv",
   row.names = FALSE
 )
 
-# ---------------------------
-# PLANTING
-# ---------------------------
+#---------------------------------------------------------------------------------------
+# SUMMARY COUNT OF THE DATA
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 # Define the output directory
 output_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
-
 # Ensure the directory exists
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
-
-
-
 #------------------------------------------------------------------------
 #Number of points from different data sources
 #-----------------------------------------------------------------------
@@ -351,17 +341,38 @@ summary_counts <- combined_data %>%
 
 # View the updated table
 print(summary_counts)
-
 # Make sure to use double backslashes or forward slashes in file paths on Windows
 write.csv(summary_counts, 
           file = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/PDHDObservation.csv",
           row.names = FALSE)
-
-
 #-----------------------------------------------------------------------
-# Plotting four methods with panel labels A, B, C, D
+#-----------------------------------------------------------------------
+# PHENOLOGICAL METHODS
+#-----------------------------------------------------------------------
 #-----------------------------------------------------------------------
 
+# Helper function to calculate metrics and return a label
+# Note: Assuming the rmse and mae functions are defined elsewhere in your script.
+get_metrics_label <- function(y, y_hat) {
+  r2 <- round(cor(y, y_hat, use = "complete.obs")^2, 2)
+  rmse_val <- round(rmse(y, y_hat), 2)
+  mae_val <- round(mae(y, y_hat), 2)
+  bias_val <- round(mean(y_hat - y, na.rm = TRUE), 2)
+  paste0("R² = ", r2, 
+         "\nRMSD = ", rmse_val, " days",
+         "\nMAD = ", mae_val, " days",
+         "\nBias = ", bias_val, " days")
+}
+# Define a common theme
+custom_theme <- theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
 # Output file
 outfile <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/PhenologyPanel.jpg"
 
@@ -437,7 +448,6 @@ remove_list <- c(
 )
 phenology_df <- phenology_df[!phenology_df$Field_Year %in% remove_list, ]
 
-
 # Plot A
 metrics_label1 <- get_metrics_label(phenology_df$PDDOY, phenology_df$SOS_trs.sos)
 n1 <- sum(!is.na(phenology_df$PDDOY) & !is.na(phenology_df$SOS_trs.sos))
@@ -508,7 +518,7 @@ p4 <- ggplot(phenology_df, aes(x = PDDOY, y = Greenup.Greenup)) +
 
 # Arrange all plots
 combined_plot <- grid.arrange(p1, p2, p3, p4, ncol = 2)
-
+combined_plot
 # Save to file
 output_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/PlantDayPhenoMethod.png"
 png(filename = output_path, width = 14, height = 8, units = "in", res = 300)
@@ -518,35 +528,9 @@ PDmetrics_label1_clean <- gsub("\n", ", ", metrics_label1)
 PDmetrics_label2_clean <- gsub("\n", ", ", metrics_label2)
 PDmetrics_label3_clean <- gsub("\n", ", ", metrics_label3)
 PDmetrics_label4_clean <- gsub("\n", ", ", metrics_label4)
-
-
 #==========================================================================
 #Harvest Phenological Methods
 #==========================================================================
-# Define a common theme
-custom_theme <- theme_minimal(base_size = 14) +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line(color = "black"),
-    axis.ticks = element_line(color = "black"),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA)
-  )
-
-# Helper function to calculate metrics and return a label
-# Note: Assuming the rmse and mae functions are defined elsewhere in your script.
-get_metrics_label <- function(y, y_hat) {
-  r2 <- round(cor(y, y_hat, use = "complete.obs")^2, 2)
-  rmse_val <- round(rmse(y, y_hat), 2)
-  mae_val <- round(mae(y, y_hat), 2)
-  bias_val <- round(mean(y_hat - y, na.rm = TRUE), 2)
-  paste0("R² = ", r2, 
-         "\nRMSE = ", rmse_val, " days",
-         "\nMAE = ", mae_val, " days",
-         "\nBias = ", bias_val, " days")
-}
-
 # Plot 1 - A
 metrics_label1 <- get_metrics_label(phenology_df$HDDOY, phenology_df$EOS_trs.eos)
 n1 <- sum(!is.na(phenology_df$HDDOY) & !is.na(phenology_df$EOS_trs.eos))
@@ -632,14 +616,11 @@ HDmetrics_label3_clean <- gsub("\n", ", ", metrics_label3)
 HDmetrics_label4_clean <- gsub("\n", ", ", metrics_label4)
 
 # ---------------------------
+# ---------------------------
 # Lag correlation plot
 # ---------------------------
-# Define the columns of interest
-# Output folder
-
-# Create your custom palette
+# ---------------------------
 pal <- friendly_pal("contrast_three", 50, type = "continuous")
-
 # Output folder
 out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
 
@@ -672,14 +653,12 @@ plots <- lapply(names(lag_cols), function(lag) {
              colors = c(pal[1], "white", pal[length(pal)]),  # min, mid, max
              title = lag)
 })
-
 # Combine plots in 2x2 grid with labels A, B, C
 combined <- grid.arrange(
   grobs = plots,
   ncol = 2,
   top = textGrob("Lag Correlation Plots", gp = gpar(fontsize = 16, fontface = "bold"))
 )
-
 # Save as one file
 outfile <- file.path(out_dir, "CorrelationPlots_Combined.png")
 png(outfile, width = 20, height = 14, units = "in", res = 300)
@@ -691,230 +670,908 @@ grid.arrange(
   )
 )
 dev.off()
+
 # ---------------------------------------------------------------------------------
-# FOUR BY RANDOM FOREST PREDICTION RESULT
+# RANDOM FOREST PREDICTION
 # ---------------------------------------------------------------------------------
 # === Plot 1: RMSE and MAE for Planting ===
-p1_planting_pheno <- ggplot(plot1_df_planting, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "LIMP Random Forest", y = "Error") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+# Extract colors from the "StarryNight" palette (you can adjust how many)
+# Ensure consistent order for legend and bars
+plot1_df_planting_pheno$Dataset <- factor(plot1_df_planting_pheno$Dataset,
+                                          levels = c("Train", "Validation", "Test"))
+plot2_df_planting_pheno$Dataset <- factor(plot2_df_planting_pheno$Dataset,
+                                          levels = c("Train", "Validation", "Test"))
 
-# === Plot 2: R² and Bias for Planting ===
-p2_planting_pheno <- ggplot(plot2_df_planting, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "LIMP Random Forest", y = "Score") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset,
+                                           levels = c("Train", "Validation", "Test"))
+plot2_df_planting_deines$Dataset <- factor(plot2_df_planting_deines$Dataset,
+                                           levels = c("Train", "Validation", "Test"))
+vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
+# Select colors 1, 3, and 5
+vg_colors <- vvg_colors[c(1, 3, 5)]
 
 
-# === Plot 1: RMSE and MAE for Planting ===
-p1_planting_deines <- ggplot(plot1_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Deines et al. 2023 features", y = "Error") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+# --- Ensure Dataset factor levels
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+library(vangogh)
 
-# === Plot 2: R² and Bias for Planting ===
-p2_planting_deines <- ggplot(plot2_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Deines et al. 2023 features", y = "Score") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+# --- Ensure Dataset factor levels
+plot1_df$Dataset <- factor(plot1_df$Dataset, levels = c("Train", "Validation", "Test"))
+plot2_df$Dataset <- factor(plot2_df$Dataset, levels = c("Train", "Validation", "Test"))
+
+# --- Separate R² and Bias
+plot2_r2_df <- filter(plot2_df, Metric == "R²")
+plot2_bias_df <- filter(plot2_df, Metric == "Bias")
+plot1_rmse_mae_df <- plot1_df  # Already RMSE & MAE
+
+# --- Colors
+vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
+vg_colors <- vvg_colors[c(1,3,5)]
+
+# --- Y-axis ranges
+y_rmse_range <- c(0, 14)  # Explicit for RMSE & MAE
+y_r2_range   <- c(0,1)
+y_bias_range <- c(-2,2)
+
+# --- Function for RMSE+MAE
+make_rmse_mae_plot <- function(df, title, y_range) {
+  ggplot(df, aes(x = Metric, y = Value, fill = Dataset)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+                  position = position_dodge(width = 0.7), width = 0.2, na.rm = TRUE) +
+    geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
+                                 sprintf("%.2f ± %.1f", Value, SD))),
+              position = position_dodge(width = 0.7), vjust = -2.5, size = 6) +
+    scale_fill_manual(values = vg_colors) +
+    scale_y_continuous(limits = y_range, breaks = seq(0, 12, 4)) +  # explicit ticks 0,4,8,12
+    labs(title = title, y = "Error", x = "") +
+    theme_classic(base_size = 16) +
+    theme(axis.title.y = element_text(size = 24),
+          axis.text.y = element_text(size = 18),
+          axis.text.x = element_text(size = 18),
+          plot.title = element_text(size = 18))
+}
+
+# --- Function for R² or Bias
+make_score_plot <- function(df, y_label, title, y_range, vjust_text = -0.8) {
+  ggplot(df, aes(x = Dataset, y = Value, fill = Dataset)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
+    geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
+                                 sprintf("%.2f ± %.1f", Value, SD))),
+              vjust = vjust_text, size = 6) +
+    scale_fill_manual(values = vg_colors) +
+    scale_y_continuous(limits = y_range) +
+    labs(title = title, y = y_label, x = "") +
+    theme_classic(base_size = 16) +
+    theme(axis.title.y = element_text(size = 22),
+          axis.text.y = element_text(size = 18),
+          axis.text.x = element_text(size = 18),
+          plot.title = element_text(size = 16))
+}
+
+# --- R² y-axis label
+r2_label <- expression(italic(R)^2~"(unitless)")
+
+# --- Create main plots
+p1 <- make_rmse_mae_plot(plot1_rmse_mae_df, title = expression(PD[SOSDER] ~ ": MAE & RMSE"), y_range = y_rmse_range) +
+  guides(fill = guide_legend(title = "Fold", nrow = 1)) +
+  theme(legend.position = c(0.05, 1),
+        legend.justification = c(0,1),
+        legend.background = element_rect(fill = alpha('white', 0.6), color = NA),
+        legend.text = element_text(size = 18),
+        legend.title = element_text(size = 18),
+        axis.text.x  = element_blank(),
+        axis.title.x = element_blank())
+
+p2 <- make_score_plot(plot2_r2_df, y_label = r2_label,
+                      title = expression(PD[SOSDER] ~ ": " * italic(R)^2),
+                      y_range = y_r2_range,
+                      vjust_text = 2.3) +
+  theme(legend.position = "none",
+        axis.text.x  = element_blank(),
+        axis.title.x = element_blank())
+
+p3 <- make_score_plot(plot2_bias_df, y_label = "Bias (day)",
+                      title = expression(PD[SOSDER] ~ ": Bias"),
+                      y_range = y_bias_range,
+                      vjust_text = -2) +
+  theme(legend.position = "none",
+        axis.text.x  = element_blank(),
+        axis.title.x = element_blank())
+
+# --- Create Deines and LIMP plots similarly
+# Factor levels
+plot1_df_planting_pheno$Dataset <- factor(plot1_df_planting_pheno$Dataset, levels = c("Train","Validation","Test"))
+plot2_df_planting_pheno$Dataset <- factor(plot2_df_planting_pheno$Dataset, levels = c("Train","Validation","Test"))
+plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset, levels = c("Train","Validation","Test"))
+plot2_df_planting_deines$Dataset <- factor(plot2_df_planting_deines$Dataset, levels = c("Train","Validation","Test"))
+
+# Separate metrics
+plot2_r2_pheno <- filter(plot2_df_planting_pheno, Metric == "R²")
+plot2_bias_pheno <- filter(plot2_df_planting_pheno, Metric == "Bias")
+plot2_r2_deines <- filter(plot2_df_planting_deines, Metric == "R²")
+plot2_bias_deines <- filter(plot2_df_planting_deines, Metric == "Bias")
+
+# Deines
+p1_deines <- make_rmse_mae_plot(plot1_df_planting_deines, "Deines et al., 2023 Random Forest: MAE & RMSE", y_rmse_range) +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
+
+p2_deines <- make_score_plot(
+  plot2_r2_deines, 
+  r2_label, 
+  title = expression("Deines et al., 2023 Random Forest: " * italic(R)^2),  # R² italic
+  y_range = y_r2_range, 
+  vjust_text = 2.3
+) +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
 
 
-# Make 2x2 grid with labels
-combined_plot <- plot_grid(
+p3_deines <- make_score_plot(plot2_bias_deines, "Bias (day)", "Deines et al., 2023 Random Forest: Bias", y_bias_range, vjust_text = -1) +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
 
-  p1_planting_deines, 
-  p2_planting_deines,
-  p1_planting_pheno, 
-  p2_planting_pheno, 
-  labels = c("A", "B", "C", "D"),  # panel labels
-  label_size = 18,                 # label font size
-  ncol = 2, nrow = 2
+# LIMP
+p1_pheno <- make_rmse_mae_plot(plot1_df_planting_pheno, "LIMP Random Forest: MAE & RMSE", y_rmse_range) +
+  theme(legend.position = "none")
+p2_pheno <- make_score_plot(
+  plot2_r2_pheno, 
+  r2_label, 
+  title = expression("LIMP Random Forest: " * italic(R)^2),  # R² italic
+  y_range = y_r2_range, 
+  vjust_text = 2.3
+) +
+  theme(legend.position = "none")
+
+
+p3_pheno <- make_score_plot(plot2_bias_pheno, "Bias (day)", "LIMP Random Forest: Bias", y_bias_range, vjust_text = -1) +
+  theme(legend.position = "none")
+
+# --- Combine all plots 3x3
+combined_3x3 <- plot_grid(
+  p1, p2, p3,
+  p1_deines, p2_deines, p3_deines,
+  p1_pheno, p2_pheno, p3_pheno,
+  labels = c("A","B","C","D","E","F","G","H","I"),
+  ncol = 3, nrow = 3,
+  align = "v",
+  rel_widths = c(2,1,1),
+  label_size = 19,
+  label_fontface = "bold",
+  label_x = 0.95,
+  label_y = 0.95
 )
 
-# Save to file
+# --- Save
+outfile <- file.path(out_dir, "Random Forest_Planting_9plots_Grid_LegendInside.png")
+ggsave(outfile, plot = combined_3x3, width = 22, height = 16, dpi = 200)
+
+# --- Show
+combined_3x3
+#---------------------------------------------------------------------------
+# HARVEST PLOTS — LIMP (Pheno) Random Forest only
+#---------------------------------------------------------------------------
+plot2_bias_df <- plot2_df_planting_pheno %>%
+  dplyr::filter(Metric == "Bias")
+
+plot3_r2_df <- plot2_df_planting_pheno %>%
+  dplyr::filter(Metric == "R²")
+# --- Ensure Dataset factor levels
+plot1_df_harvest_pheno$Dataset <- factor(plot1_df_harvest_pheno$Dataset, 
+                                         levels = c("Train","Validation","Test"))
+plot2_df_harvest_pheno$Dataset <- factor(plot2_df_harvest_pheno$Dataset, 
+                                         levels = c("Train","Validation","Test"))
+
+# --- Separate R² and Bias
+plot2_r2_harvest_pheno <- dplyr::filter(plot2_df_harvest_pheno, Metric == "R²")
+plot2_bias_harvest_pheno <- dplyr::filter(plot2_df_harvest_pheno, Metric == "Bias (day)")
+
+# --- Colors
+vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
+vg_colors <- vvg_colors[c(1,3,5)]
+
+# --- Compute y-axis ranges for consistency
+y_rmse_range <- range(c(0, 9), na.rm = TRUE)
+y_r2_range   <- c(0,1)
+y_bias_range <- range(c(-1,1.2), na.rm = TRUE)
+
+# --- Function for RMSE+MAE plot
+make_rmse_mae_plot <- function(df, title, y_range) {
+  ggplot(df, aes(x = Metric, y = Value, fill = Dataset)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+                  position = position_dodge(width = 0.7), width = 0.2, na.rm = TRUE) +
+    geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
+                                 sprintf("%.2f ± %.2f", Value, SD))),
+              position = position_dodge(width = 0.7), vjust = -1, size = 4) +
+    labs(title = title, y = "Error", x = "") +
+    scale_fill_manual(values = vg_colors) +
+    coord_cartesian(ylim = y_range) +
+    theme_classic(base_size = 10) +
+    theme(axis.title.y = element_text(size = 16),
+          axis.text.x = element_text(size = 14),
+          axis.text.y = element_text(size = 14),
+          plot.title = element_text(size = 16))
+}
+
+# --- Function for R² or Bias plot
+make_score_plot <- function(df, y_label, title, y_range, vjust_text = -0.8) {
+  ggplot(df, aes(x = Dataset, y = Value, fill = Dataset)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
+    geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
+                                 sprintf("%.2f ± %.2f", Value, SD))),
+              vjust = vjust_text, size = 4) +
+    labs(title = title, y = y_label, x = "") +
+    scale_fill_manual(values = vg_colors) +
+    coord_cartesian(ylim = y_range) +
+    theme_classic(base_size = 10) +
+    theme(axis.title.y = element_text(size = 16),
+          axis.text.x = element_text(size = 14),
+          axis.text.y = element_text(size = 14),
+          plot.title = element_text(size = 16))
+}
+
+# --- R² y-axis label
+r2_label <- expression(italic(R)^2~"(unitless)")
+
+# --- Create PHENO (LIMP) MAE/RMSE plot (legend inside horizontal)
+# --- Create PHENO (LIMP) MAE/RMSE plot with legend in top-left (horizontal)
+p1_pheno <- make_rmse_mae_plot(plot1_df_harvest_pheno, "LIMP: MAE & RMSE", y_rmse_range) +
+  guides(fill = guide_legend(title = "Fold", nrow = 1)) +
+  theme(
+    legend.position = c(0.05, 0.95),   # top-left, slightly above the plot
+    legend.justification = c(0, 1),
+    legend.direction = "horizontal",
+    legend.background = element_rect(fill = alpha('white', 0.6), color = NA),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 14),
+    #axis.title.x = element_blank(),
+    #axis.text.x = element_blank()
+  )
+
+# --- PHENO R² plot (no legend)
+p2_pheno <- make_score_plot(
+  plot2_r2_harvest_pheno, r2_label, expression("LIMP: " * italic(R)^2),
+  y_r2_range, vjust_text = 2.3
+) +
+  theme(
+    legend.position = "none",
+    #axis.title.x = element_blank(),
+    #axis.text.x = element_blank()
+  )
+
+# --- PHENO Bias plot (no legend)
+p3_pheno <- make_score_plot(
+  plot2_bias_harvest_pheno, "Bias (day)", "LIMP: Bias",
+  y_bias_range, vjust_text = -1
+) +
+  theme(
+    legend.position = "none",
+    #axis.title.x = element_blank(),
+    #axis.text.x = element_blank()
+  )
+
+# --- Combine PHENO plots (keep legend only from p1)
+combined_pheno_plot <- (
+  p1_pheno + p2_pheno + p3_pheno +
+    plot_layout(
+      nrow = 1,
+      ncol = 3,
+      widths = c(1.85, 1, 1)
+    )
+) &
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  )
+combined_pheno_plot
+
+# --- Add A, B, C labels
+combined_pheno_plot <- combined_pheno_plot +
+  plot_annotation(
+    tag_levels = "A",
+    theme = theme(plot.tag = element_text(face = "bold", size = 18))
+  )
+combined_pheno_plot
+# --- Save
 out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
-outfile <- file.path(out_dir, "RF_Prediction_Results_Grid.png")
+outfile <- file.path(out_dir, "RF_Harvest_Pheno_3plots_Grid_LegendBottom_Labeled.png")
+ggsave(outfile, plot = combined_pheno_plot, width = 18, height = 6, dpi = 200)
 
-ggsave(outfile, plot = combined_plot, width = 14, height = 10, dpi = 300)
-
-
-#---------------------------------------------------------------------------
-#HARVEST
-#---------------------------------------------------------------------------
-# === Plot 1: RMSE and MAE for Harvest ===
-p1_harvest_deines <- ggplot(plot1_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Harvesting: RMSE and MAE", y = "Error", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
+#---------------------------------------------------------------
+#Features used to predict PD 
+#---------------------------------------------------------------
+colnames(df_planting)
+#---------------------------------------------------------------
+#Features used to predict HD 
+#---------------------------------------------------------------
+colnames(df_harvest)
+colnames(df_planting_pheno)
+#---------------------------------------------------------------------------------------
+#PHENOLOGICAL VS RESIDUALS
+#---------------------------------------------------------------------------------------
+#--------------------------------------------------------------------
+# Residual Correlation with Significance Levels (Organized Version)
+#--------------------------------------------------------------------
+library(dplyr)
+#--------------------------------------------------------------------
+# Step 1: Prepare Data
+#--------------------------------------------------------------------
+df_planting_pheno_sos_resi <- df %>%
+  dplyr::select(
+    cum_tmin, cum_soiltemp, SOS_trs.sos, cum_gdd, SOS_deriv.sos,
+    cum_RH, cum_vpd, avgsoilorg, PDDOY, UD.UD, Greenup.Greenup
+  ) %>%
+  dplyr::filter(!is.na(PDDOY)) %>%
+  drop_na() %>%
+  dplyr::mutate(
+    residual_SOS_deriv = SOS_deriv.sos - PDDOY,
+    residual_SOS_trs   = SOS_trs.sos - PDDOY,
+    residual_ud        = UD.UD - PDDOY,
+    residual_greenup   = Greenup.Greenup - PDDOY
   )
 
-# === Plot 2: R² and Bias for Harvest ===
-p2_harvest_deines <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
-# === Plot 1: RMSE and MAE for Harvest ===
-p1_harvest_pheno <- ggplot(plot1_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "LIMP Random Forest", y = "Error") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+#--------------------------------------------------------------------
+# Step 2: Define Columns
+#--------------------------------------------------------------------
+feature_cols <- c("cum_tmin", "cum_soiltemp", "cum_gdd",
+                  "cum_RH", "cum_vpd", "avgsoilorg")
+resid_cols   <- c("residual_SOS_deriv", "residual_SOS_trs",
+                  "residual_ud", "residual_greenup")
 
-# === Plot 2: R² and Bias for Harvest ===
-p2_harvest_pheno <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                position = position_dodge(width = 0.7),
-                width = 0.2, na.rm = TRUE) +
-  geom_text(aes(label = ifelse(is.na(SD),
-                               sprintf("%.2f", Value),
-                               sprintf("%.2f ± %.2f", Value, SD))),
-            position = position_dodge(width = 0.7),
-            vjust = -0.8,
-            size = 4.5) +
-  labs(title = "LIMP Random Forest", y = "Score") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    plot.title = element_text(size = 18, face = "bold")
-  )
+#--------------------------------------------------------------------
+# Step 3: Function to Calculate Correlation + Significance
+#--------------------------------------------------------------------
+cor_with_p <- function(x, y) {
+  test <- suppressWarnings(cor.test(x, y, use = "pairwise.complete.obs"))
+  r <- round(test$estimate, 2)
+  p <- test$p.value
+  stars <- ifelse(p < 0.01, "***",
+                  ifelse(p < 0.05, "**",
+                         ifelse(p < 0.1, "*", "")))
+  return(paste0(r, stars))
+}
 
-# Combine harvest plots into 2x2 grid
-combined_harvest <- plot_grid(
-  p1_harvest_pheno, 
-  p2_harvest_pheno, 
-  labels = c("A", "B"),  # panel labels
-  label_size = 18,                 # label font size
-  ncol = 2, nrow = 1
+#--------------------------------------------------------------------
+# Step 4: Compute Correlation Table
+#--------------------------------------------------------------------
+res_list <- list()
+for (res in resid_cols) {
+  row_values <- sapply(feature_cols, function(f)
+    cor_with_p(df_planting_pheno_sos_resi[[res]], df_planting_pheno_sos_resi[[f]]))
+  res_list[[res]] <- row_values
+}
+residual_corr_sig <- do.call(rbind, res_list)
+rownames(residual_corr_sig) <- resid_cols
+
+#--------------------------------------------------------------------
+# Step 5: Rename Rows and Columns
+#--------------------------------------------------------------------
+rownames(residual_corr_sig) <- c(
+  "Duration_PD_SOSDER",
+  "Duration_PD_SOSTRS",
+  "Duration_PD_UD",
+  "Duration_PD_Greenup"
 )
 
-# Save to file
-out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
-outfile <- file.path(out_dir, "RF_Harvest_Results_Grid.png")
+colnames(residual_corr_sig) <- c(
+  "AirTmin_cum",
+  "SoilTmean_cum",
+  "GDDcum",
+  "RHcum",
+  "VPDcum",
+  "SOCmean"
+)
 
-ggsave(outfile, plot = combined_harvest, width = 14, height = 6, dpi = 300)
+#--------------------------------------------------------------------
+# Step 6: Save and Print
+#--------------------------------------------------------------------
+out_file <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/Residuals_Pheno_withSignificance_Renamed.csv"
+write.csv(residual_corr_sig, out_file, row.names = TRUE)
+print(residual_corr_sig)
+#--------------------------------------------------------------------
+# Replace stars with p-value text
+#--------------------------------------------------------------------
+# Make a copy as character matrix
+residual_corr_sig_p <- residual_corr_sig
+
+# Replace stars with p-values
+residual_corr_sig_p[,] <- apply(residual_corr_sig, c(1,2), function(x) {
+  x <- gsub("\\*\\*\\*", " (p < 0.01)", x)
+  x <- gsub("\\*\\*", " (p < 0.05)", x)
+  x <- gsub("\\*", " (p < 0.1)", x)
+  return(x)
+})
+
+# Convert to data frame if needed
+residual_corr_sig_p <- as.data.frame(residual_corr_sig_p)
+residual_corr_sig_p
+
+# Mapping for nicer residual names
+resid_name_map <- c(
+  "Duration_PD_SOSDER"  = "ResidualSOSDER",
+  "Duration_PD_SOSTRS"  = "ResidualSOSTRS",
+  "Duration_PD_UD"      = "ResidualUD",
+  "Duration_PD_Greenup" = "ResidualGreenup"
+)
+
+# --- CORRECTED SUMMARY GENERATION LOGIC ---
+# Create sentence per residual (top 3 only)
+sentences <- sapply(rownames(residual_corr_sig), function(resid_name) {
+  # 1. Get the original values (e.g., "-0.3***") for robust numerical sorting
+  original_values <- residual_corr_sig[resid_name, ]
+  
+  # 2. Extract numeric values for sorting by removing ONLY the '*' characters 
+  # This correctly turns "-0.3***" into -0.3
+  numeric_vals <- abs(as.numeric(gsub("\\*", "", original_values)))
+  
+  # 3. Get the top 3 indices based on absolute numeric value
+  top3_idx <- order(numeric_vals, decreasing = TRUE)[1:3]
+  
+  # 4. Use the index to pull both the predictor names and the nicely formatted values
+  top_predictors <- colnames(residual_corr_sig)[top3_idx]
+  # Pull the formatted values (e.g., "-0.3 (p < 0.01)") from the output matrix
+  cor_values <- residual_corr_sig_p[resid_name, top3_idx]
+  
+  # 5. Create the sentence
+  paste0(resid_name_map[resid_name], " were most correlated with ",
+         paste0(top_predictors, " (r = ", cor_values, ")", collapse = ", "), ".")
+})
+
+# Combine sentences
+summary_sentence <- paste(sentences, collapse = " ")
+
+# Print the final, corrected summary
+cat("\n--- Corrected Summary Sentence ---\n")
+cat(summary_sentence, "\n")
+
+
+#-----------------------------------------------------------------
+#Deines Residual 
+#-----------------------------------------------------------------
+#-----------------------------------------------------------------
+# Deines Residual Correlation Analysis (with significance)
+#-----------------------------------------------------------------
+val100test_define_set$Field_Year <- val100test_define_set$Field_ID
+df_planting_pheno_residualdeines <- df %>%
+  dplyr::select(
+    cum_RH, SOS_trs.sos, SOS_deriv.sos,
+     avgsoilorg, cum_tmin,
+    cum_soiltemp, cum_gdd,  cum_vpd,
+     PDDOY, Field_Year
+  ) %>%
+  dplyr::filter(!is.na(PDDOY)) %>%
+  drop_na() %>%
+  dplyr::inner_join(
+    val100test_define_set %>%
+      dplyr::select(Field_Year, obs, pred, residual, set),
+    by = "Field_Year"
+  )
+df_planting_deines_residual$Field_Year <- df_planting_deines_residual$Field_ID
+df_planting_pheno_residualdeines <- df %>%
+  dplyr::select(
+    cum_RH, SOS_trs.sos, SOS_deriv.sos,
+    avgsoilorg, cum_tmin,
+    cum_soiltemp, cum_gdd,  cum_vpd,
+    PDDOY, Field_Year
+  ) %>%
+  dplyr::filter(!is.na(PDDOY)) %>%
+  drop_na() %>%
+  dplyr::inner_join(
+    df_planting_deines_residual %>%
+      dplyr::select(Field_Year, residual_PDDeines),
+    by = "Field_Year"
+  )
+
+# Select numeric columns
+numeric_cols <- df_planting_pheno_residualdeines %>% select(where(is.numeric))
+
+# Compute correlation and p-values
+cor_test <- function(x, y) {
+  test <- cor.test(x, y, use = "pairwise.complete.obs")
+  c(cor = test$estimate, p = test$p.value)
+}
+
+vars_to_keep <- c("cum_RH", "SOS_trs.sos", "SOS_deriv.sos", 
+                  "avgsoilorg", "cum_tmin",
+               "cum_soiltemp", "cum_gdd", 
+                  "cum_vpd")
+
+results <- sapply(vars_to_keep, function(v) {
+  cor_test(numeric_cols$residual_PDDeines, numeric_cols[[v]])
+})
+
+# Convert results to data frame
+results_df <- as.data.frame(t(results))
+colnames(results_df) <- c("Correlation", "p_value")
+
+# Add significance stars
+results_df$Significance <- cut(
+  results_df$p_value,
+  breaks = c(-Inf, 0.01, 0.05, 0.1, Inf),
+  labels = c("***", "**", "*", "")
+)
+
+# Rename variables for clarity
+results_df$Variable <- c("RHcum", "SOSTRS", "SOSDER", 
+                         "SOCmean", "AirTmin_cum",
+                         "Soil_T_meancum",
+                         "GDDcum", "VPDcum")
+
+# Round correlation values
+results_df_clean <- results_df[, c("Correlation", "Significance")]
+# Combine correlation and significance into one column
+results_df_clean$Correlation_and_Significance <- paste0(
+  round(results_df_clean$Correlation, 2),
+  results_df_clean$Significance
+)
+# Keep only the new combined column and rename
+results_df_final <- data.frame(
+  Variable = results_df$Variable,
+  `Correlation~(with~significance)` = results_df_clean$Correlation_and_Significance
+)
+# Rename column with proper spaces
+colnames(results_df_final)[2] <- "Correlation (with significance)"
+# Save to CSV
+out_file <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/Residual_Deines_CorrSign.csv"
+write.csv(results_df_final, out_file, row.names = FALSE)
+# Preview
+print(results_df_final)
+# Select top variables based on absolute correlation
+# Map stars to italic p-values
+convert_stars_to_pval <- function(x) {
+  if (grepl("\\*\\*\\*", x)) {
+    return("<0.01")
+  } else if (grepl("\\*\\*", x)) {
+    return("<0.05")
+  } else if (grepl("\\*", x)) {
+    return("<0.1")
+  } else {
+    return("")
+  }
+}
+
+# Prepare top variables
+top_vars <- results_df_final %>%
+  dplyr::mutate(
+    abs_corr = abs(as.numeric(sub("\\*+", "", `Correlation (with significance)`))),
+    pval_text = sapply(`Correlation (with significance)`, convert_stars_to_pval),
+    corr_text = ifelse(pval_text != "",
+                       paste0(sub("\\*+", "", `Correlation (with significance)`), " (p-value ", pval_text, ")"),
+                       sub("\\*+", "", `Correlation (with significance)`))
+  ) %>%
+  dplyr::arrange(desc(abs_corr)) %>%
+  dplyr::slice(1:9)
+
+# Create sentence
+summary_sentence <- paste0(
+  "The PD residuals from Deines et al. 2023 were most correlated with ",
+  paste0(top_vars$Variable, " (r = ", top_vars$corr_text, ")", collapse = ", "),
+  ", highlighting stronger associations with phenological and temperature-related predictors."
+)
+
+cat(summary_sentence, "\n")
+
+
+
+
+#========================================================
+# 6. PLOT VARIABLE IMPORTANCE (HARVESTING)
+#========================================================
+# Prepare data for plotting Harvest variable importance
+harvest_importance_combined <- harvest_var_imp_summary %>%
+  rename(
+    `%IncMSE` = MeanIncMSE,
+    Gini = MeanIncNodePurity
+  ) %>%
+  mutate(
+    # Simple rescaling: divide Gini by a constant to bring it to same order as %IncMSE
+    Gini_scaled = Gini / 5000,  # adjust 5000 as needed
+    Total_scaled = `%IncMSE` + Gini_scaled
+  )
+
+# Convert to long format for Harvest
+harvest_importance_long <- harvest_importance_combined %>%
+  select(variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
+  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
+  mutate(variable = reorder(variable, Total_scaled))
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Original variables in your dataframe
+original_vars <- c(
+  "RD.RD", "Dormancy.Dormancy", "EOS_trs.eos", "EOS_deriv.eos", "cum_RH", 
+  "a2", "avgsoilorg", "UD.UD", "DOY_maxROC_IAVI", "SOS_trs.sos", "cum_meansrad",
+  "cum_soiltemp", "DOY_maxROC_MRBVI", "DOY_maxROC_NMDI", "DD.DD", "avgsoilclay",
+  "DOY_maxROC_TGI", "SOS_deriv.sos", "cum_gdd", "cum_tmax", "cum_vpd",
+  "DOY_maxROC_ExGR", "cumGDVI", "cum_tmin", "b1", "DOY_max_before_min_fit",
+  "DOY_maxROC_EVI", "a1", "a3.a3", "DOY_min_fit"
+)
+
+# New names (simplified and consistent)
+new_vars <- c(
+  "RD", "Dormancy", "EOSTRS", "EOSDeriv", "RHcum", 
+  "kNDVIa2", "SOCmean", "UD", "DOY_mxROCPoD_IAVI", "SOSTRS", "SRADcum",
+  "SoilTmeancum", "DOY_mxROCPoD_MRBVI", "DOY_mxROCPoD_NMDI", "DD", "clayCmean",
+  "DOY_mxROCPoD_TGI", "SOSDeriv", "GDDcum", "AirTmax_cum", "VPDcum",
+  "DOY_mxROCPoD_ExGR", "GDVIcum", "AirTmincum", "kNDVIb1", "DOY_earlymin_kNDVI",
+  "DOY_mxROCPoD_EVI", "kNDVIa1", "a3", "DOY_earlymax_kNDVI"
+)
+
+# Assign the new variable names
+harvest_importance_combined$variable <- factor(
+  harvest_importance_combined$variable,
+  levels = original_vars,
+  labels = new_vars
+)
+
+# Map readable labels with subscripts for plotting
+variable_labels <- c(
+  "SOCmean" = expression(SOC[mean]),
+  "RHcum" = expression(RH[cum]),
+  "kNDVImax" = expression(kNDVI[max]),
+  "EOSTRS" = expression(EOS[TRS]),
+  "AirTmincum" = expression(AirTmin[cum]),
+  "AirTmax_cum"= expression(AirTax[cum]),
+  "SOSDeriv" = expression(SOS[Deriv]),
+  "SOSTRS" = expression(SOS[TRS]),
+  "SoilTmeancum" = expression(SoilTmean[cum]),
+  "EOSDeriv" = expression(EOS[Deriv]),
+  "DD" = expression(DD),
+  "VPDcum" = expression(VPD[cum]),
+  "GDDcum" = expression(GDD[cum]),
+  "SRADcum" = expression(Srad[cum]),
+  "UD" = expression(UD)
+)
+
+# Convert to long format for plotting
+harvest_importance_long <- harvest_importance_combined %>%
+  select(variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
+  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
+  mutate(variable = reorder(variable, Total_scaled))
+
+# Plot with subscripts
+p_harvest_total_importance <- ggplot(harvest_importance_long, aes(x = Value, y = variable, fill = Metric)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_fill_manual(
+    values = c("%IncMSE" = "#3C5488FF", "Gini_scaled" = "#9C51B6"),
+    name = "Importance Metric"
+  ) +
+  scale_y_discrete(labels = variable_labels) +  # Apply subscript labels
+  labs(
+    title = "Harvesting: Variable Importance (Combined %IncMSE and Gini)",
+    x = "Total Rescaled Importance",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(face = "bold"),
+    legend.position = "bottom",
+    panel.grid.major.y = element_blank()
+  )
+
+print(p_harvest_total_importance)
+# Save the plot for Harvest
+ggsave(
+  filename = "harvesting_variable_importance_total_stacked_scaled.jpeg", # Changed filename
+  plot = p_harvest_total_importance,
+  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
+  dpi = 300,
+  width = 10,
+  height = 8,
+  units = "in"
+)
+
+#========================================================
+# 6. PLOT VARIABLE IMPORTANCE (PLANTING)
+#========================================================
+planting_importance_combined <- planting_var_imp_summary %>%
+  rename(
+    `%IncMSE` = MeanIncMSE,
+    Gini = MeanIncNodePurity
+  ) %>%
+  mutate(
+    # Simple rescaling: divide Gini by a constant to bring it to same order as %IncMSE
+    Gini_scaled = Gini / 5000,  # adjust 5000 as needed
+    Total_scaled = `%IncMSE` + Gini_scaled
+  )
+
+
+# Convert to long format for Planting
+planting_importance_long <- planting_importance_combined %>%
+  select(Variable, `%IncMSE`, `Gini_scaled`, Total_scaled) %>%
+  pivot_longer(cols = c(`%IncMSE`, `Gini_scaled`), names_to = "Metric", values_to = "Value") %>%
+  mutate(Variable = reorder(Variable, Total_scaled))
+
+
+
+# Map original variable names to readable names
+planting_importance_long <- planting_importance_long %>%
+  mutate(
+    Variable = recode(
+      Variable,
+      "avgsoilorg" = "SOCmean",
+      "cum_RH" = "RHcum",
+      "Value_max_obs" = "kNDVImax",
+      "EOS_trs.eos" = "EOSTRS",
+      "cum_tmin" = "AirTmincum",
+      "SOS_deriv.sos" = "SOSDeriv",
+      "SOS_trs.sos" = "SOSTRS",
+      "cum_soiltemp" = "SoilTmeancum",
+      "EOS_deriv.eos" = "EOSDeriv",
+      "DD.DD" = "DD",
+      "cum_vpd" = "VPDcum",
+      "cum_gdd" = "GDDcum",
+      "cum_meansrad" = "Sradcum",
+      "UD.UD" = "UD"
+    ),
+    Variable = reorder(Variable, Total_scaled)
+  )
+# Map readable labels with subscripts
+variable_labels <- c(
+  "SOCmean" = expression(SOC[mean]),
+  "RHcum" = expression(RH[cum]),
+  "kNDVImax" = expression(kNDVI[max]),
+  "EOSTRS" = expression(EOS[TRS]),
+  "AirTmincum" = expression(AirTmin[cum]),
+  "SOSDeriv" = expression(SOS[Deriv]),
+  "SOSTRS" = expression(SOS[TRS]),
+  "SoilTmeancum" = expression(SoilTmean[cum]),
+  "EOSDeriv" = expression(EOS[Deriv]),
+  "DD" = expression(DD),
+  "VPDcum" = expression(VPD[cum]),
+  "GDDcum" = expression(GDD[cum]),
+  "Sradcum" = expression(Srad[cum]),
+  "UD" = expression(UD)
+)
+
+
+# Plot with formatted y-axis
+p_planting_total_importance <- ggplot(planting_importance_long, aes(x = Value, y = Variable, fill = Metric)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_fill_manual(
+    values = c("%IncMSE" = "#3C5488FF", "Gini_scaled" = "#9C51B6"),
+    name = "Importance Metric"
+  ) +
+  scale_y_discrete(labels = variable_labels) +
+  labs(
+    title = "Planting: Variable Importance (Combined Standardized %IncMSE and Gini)",
+    x = "Total Standardized Importance",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(face = "bold"),
+    legend.position = "bottom",
+    panel.grid.major.y = element_blank()
+  )
+
+print(p_planting_total_importance)
+# Save the plot for Planting
+ggsave(
+  filename = "planting_variable_importance_total_stacked_scaled.jpeg", # Changed filename
+  plot = p_planting_total_importance,
+  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
+  dpi = 300,
+  width = 10,
+  height = 8,
+  units = "in"
+)
+
+#---------------------------------------------------------------
+# CORRELATION PLOT
+#---------------------------------------------------------------
+# Map readable labels with subscripts
+# Build df_corr by selecting and cleaning the data
+df_corr <- df %>%
+  dplyr::select(
+    cum_RH, SOS_trs.sos, SOS_deriv.sos, UD.UD,
+    cum_meansrad, avgsoilorg, cum_tmin, EOS_trs.eos,
+    EOS_deriv.eos, cum_soiltemp, cum_gdd, DD.DD, cum_vpd,
+    Value_max_obs, PDDOY
+  ) %>%
+  # Filter and drop NA as in your original script
+  filter(!is.na(PDDOY)) %>%
+  drop_na()
+
+# Create the correlation matrix
+corr_mat <- cor(df_corr, use = "pairwise.complete.obs")
+
+# Reorder columns to put PDDOY first
+cols_order <- c("PDDOY", setdiff(colnames(corr_mat), "PDDOY"))
+corr_mat2 <- corr_mat[cols_order, cols_order]
+
+# Define the readable labels with subscripts
+variable_labels <- c(
+  "cum_RH" = "RH[cum]",
+  "SOS_trs.sos" = "SOS[TRS]",
+  "SOS_deriv.sos" = "SOS[Deriv]",
+  "UD.UD" = "UD",
+  "cum_meansrad" = "Srad[cum]",
+  "avgsoilorg" = "SOC[mean]",
+  "cum_tmin" = "AirTmin[cum]",
+  "EOS_trs.eos" = "EOS[TRS]",
+  "EOS_deriv.eos" = "EOS[Deriv]",
+  "cum_soiltemp" = "SoilTmean[cum]",
+  "cum_gdd" = "GDD[cum]",
+  "DD.DD" = "DD",
+  "cum_vpd" = "VPD[cum]",
+  "Value_max_obs" = "kNDVI[max]",
+  "PDDOY" = "PD"
+)
+
+# Crucial step: Rename the row and column names of the matrix
+# This ensures ggplot will use the correct labels for the plot axes
+colnames(corr_mat2) <- variable_labels[colnames(corr_mat2)]
+rownames(corr_mat2) <- variable_labels[rownames(corr_mat2)]
+
+# Melt the correlation matrix for ggplot2
+# Only keep the lower triangle of the matrix to avoid redundancy
+corr_mat_long <- as.data.frame(as.table(corr_mat2)) %>%
+  rename(Var1 = Var1, Var2 = Var2, value = Freq) %>%
+  mutate(Var1 = factor(Var1, levels = rev(unique(Var1))),
+         Var2 = factor(Var2, levels = unique(Var1))) %>%
+  filter(as.integer(Var2) <= as.integer(Var1))
+
+# Use viridis palette instead
+library(viridis)
+
+# Generate the plot directly with ggplot2 and assign to a variable
+p <- ggplot(data = corr_mat_long, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 5) +
+  scale_fill_viridis(
+    limits = c(-1, 1),
+    name = "Correlation",
+    option = "plasma"  # or "viridis", "magma", "inferno", "cividis"
+  ) +
+  theme_minimal() +
+  coord_fixed() +
+  labs(title = "Correlation Plot") +
+  # Use scale_x_discrete and scale_y_discrete to control the labels
+  scale_x_discrete(labels = parse(text = levels(corr_mat_long$Var2))) +
+  scale_y_discrete(labels = parse(text = levels(corr_mat_long$Var1))) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 10),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent"),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.position = "right"
+  )
+p
+# Save the plot to the specified directory
+ggsave(
+  filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/corr plot.png",
+  plot = p,
+  width =12,
+  height = 8,
+  dpi = 500
+)
+
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#OLD PLOTS
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
 
 
 # ---------------------------
@@ -1214,263 +1871,6 @@ message(paste("Formatted combined_harvest_metrics data frame saved as CSV to:", 
 
 
 
-#---------------------------------------------------------------
-#Features used to predict PD 
-#---------------------------------------------------------------
-colnames(df_planting)
-#---------------------------------------------------------------
-#Features used to predict HD 
-#---------------------------------------------------------------
-colnames(df_harvest)
-
-colnames(df_planting_pheno)
-
-
-
-#---------------------------------------------------------------------------------------
-#PHENOLOGICAL VS RESIDUALS
-#---------------------------------------------------------------------------------------
-# Create residuals for each prediction method
-# UD and Greenup was the corr between cum tmax from UD-50/PDDOY days
-# SOStrs and SOSdev was the corr between cum tmax from SOS trs-50/PDDOY days
-# Calculate the meteo again and merge them with the df 
-# do two df corr and join the rbind the corr matt
-df_sos <- deinesharmonicminmaxdf %>%
-  left_join(phenology_df, by = "Field_Year")
-df_sos <- df_sos %>%
-  left_join(meteo_summary_df_sos, by = "Field_Year")
-df_sos <- df_sos %>%
-  rename(DOY_max_fit = DOY_max_fit.x) %>%  # remove .x suffix
-  select(-DOY_max_fit.y)                   # drop the .y column
-df_sos <- df_sos %>%
-  rename(
-    PDDOY = PDDOY.x,
-    HDDOY = HDDOY.x
-  ) %>%
-  select(
-    -PDDOY.y,
-    -HDDOY.y
-  )     # drop the .y column
-
-# Step 1: Add residuals
-df <- df %>%
-  mutate(
-    residual_ud        = UD.UD - PDDOY,
-    residual_greenup   = Greenup.Greenup - PDDOY,
-  )
-df_sos <- df_sos %>%
-  mutate(
-    residual_sos_deriv = SOS_deriv.sos - PDDOY,
-    residual_sos_trs   = SOS_trs.sos - PDDOY
-  )
-# Step 2: Identify residual and cumulative columns
-resid_cols <- grep("^residual_", names(df), value = TRUE)
-cum_cols   <- grep("^cum", names(df), value = TRUE)
-
-resid_cols_sos <- grep("^residual_", names(df_sos), value = TRUE)
-cum_cols_sos   <- grep("^cum", names(df_sos), value = TRUE)
-
-# 🔹 Remove cumRNDVI explicitly if present
-cum_cols <- setdiff(cum_cols, "cumRNDVI")
-cum_cols_sos <- setdiff(cum_cols_sos, "cumRNDVI")
-
-# Step 3: Build correlation dataset (only residual vs cum)
-df_corr <- df %>% select(all_of(resid_cols), all_of(cum_cols))
-df_corr_sos <- df_sos %>% select(all_of(resid_cols_sos), all_of(cum_cols_sos))
-
-# Step 4: Compute correlation matrix
-cor_mat <- cor(df_corr, use = "pairwise.complete.obs")
-cor_mat_sos <- cor(df_corr_sos, use = "pairwise.complete.obs")
-
-# Step 1: Find common columns (ensures cumRNDVI already excluded)
-common_cols <- intersect(colnames(cor_mat), colnames(cor_mat_sos))
-
-# Step 2: Subset each correlation matrix for residuals and common cols
-cor1_sub <- cor_mat[c("residual_ud", "residual_greenup"), common_cols, drop = FALSE]
-cor2_sub <- cor_mat_sos[c("residual_sos_deriv", "residual_sos_trs"), common_cols, drop = FALSE]
-
-# Step 3: Row-bind
-residual_common <- rbind(cor1_sub, cor2_sub)
-
-# Step 4: Round to 2 decimal places
-residual_common_rounded <- round(residual_common, 2)
-
-# Step 5: Save to CSV
-out_file <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/Residuals_Pheno.csv"
-write.csv(residual_common_rounded, out_file, row.names = TRUE)
-
-
-#-----------------------------------------------------------------
-val100test_define_set$Field_Year<-val100test_define_set$Field_ID
-df_planting_pheno_residualdeines <- df %>%
-  dplyr::select(
-    cum_RH, SOS_trs.sos, SOS_deriv.sos, UD.UD,
-    cum_meansrad, avgsoilorg, cum_tmin, EOS_trs.eos, 
-    EOS_deriv.eos, cum_soiltemp, cum_gdd, DD.DD, cum_vpd,
-    Value_max_obs , PDDOY, Field_Year
-  ) %>% # drop Field_ID for modeling
-  dplyr::filter(!is.na(PDDOY))%>%
-  drop_na() # This removes rows with NA in any column
-
-# Keep only rows present in val100test_define_set
-df_planting_pheno_residualdeines <- df_planting_pheno_residualdeines %>%
-  dplyr::inner_join(
-    val100test_define_set %>%
-      dplyr::select(Field_Year, obs, pred, residual, set),
-    by = "Field_Year"
-  )
-# Step 1: Ensure residuals exist (replace 'residual_*' with your actual residual column names if needed)
-# For example, if residuals are already in df_planting_pheno_residualdeines
-# Step 2: Select only numeric columns (residuals + cumulative/other numeric variables)
-numeric_cols <- df_planting_pheno_residualdeines %>% select(where(is.numeric))
-
-# Step 3: Compute correlation matrix
-cor_mat <- cor(numeric_cols, use = "pairwise.complete.obs")
-# Assume cor_mat is your full correlation matrix
-# Define the columns to keep
-keep_cols <- c("cum_RH", "SOS_trs.sos", "SOS_deriv.sos", "UD.UD",
-               "cum_meansrad", "avgsoilorg", "cum_tmin", "EOS_trs.eos",
-               "EOS_deriv.eos", "cum_soiltemp", "cum_gdd", "DD.DD",
-               "cum_vpd", "Value_max_obs")
-
-# Step 1: Extract only the "residual" row and selected columns
-residual_row <- cor_mat["residual", keep_cols, drop = FALSE]
-
-# Step 2: Round to 2 decimal places
-residual_row_rounded <- round(residual_row, 2)
-
-# Step 3: Save to CSV
-out_file <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/Residual_Deines.csv"
-write.csv(residual_row_rounded, out_file, row.names = TRUE)
-
-
-
-#---------------------------------------------------------------
-# CORRELATION PLOT
-#---------------------------------------------------------------
-# Map readable labels with subscripts
-library(dplyr)
-library(ggcorrplot)
-
-# Build df_corr by selecting and cleaning the data
-df_corr <- df %>%
-  dplyr::select(
-    cum_RH, SOS_trs.sos, SOS_deriv.sos, UD.UD,
-    cum_meansrad, avgsoilorg, cum_tmin, EOS_trs.eos,
-    EOS_deriv.eos, cum_soiltemp, cum_gdd, DD.DD, cum_vpd,
-    Value_max_obs, PDDOY
-  ) %>%
-  # Filter and drop NA as in your original script
-  filter(!is.na(PDDOY)) %>%
-  drop_na()
-
-# Create the correlation matrix
-corr_mat <- cor(df_corr, use = "pairwise.complete.obs")
-
-# Reorder columns to put PDDOY first
-cols_order <- c("PDDOY", setdiff(colnames(corr_mat), "PDDOY"))
-corr_mat2 <- corr_mat[cols_order, cols_order]
-
-# Define the readable labels with subscripts
-variable_labels <- c(
-  "cum_RH" = "RH[cum]",
-  "SOS_trs.sos" = "SOS[TRS]",
-  "SOS_deriv.sos" = "SOS[Deriv]",
-  "UD.UD" = "UD",
-  "cum_meansrad" = "Srad[cum]",
-  "avgsoilorg" = "SOC[mean]",
-  "cum_tmin" = "AirTmin[cum]",
-  "EOS_trs.eos" = "EOS[TRS]",
-  "EOS_deriv.eos" = "EOS[Deriv]",
-  "cum_soiltemp" = "SoilTmean[cum]",
-  "cum_gdd" = "GDD[cum]",
-  "DD.DD" = "DD",
-  "cum_vpd" = "VPD[cum]",
-  "Value_max_obs" = "kNDVI[max]",
-  "PDDOY" = "PD"
-)
-
-# Crucial step: Rename the row and column names of the matrix
-# This ensures ggplot will use the correct labels for the plot axes
-colnames(corr_mat2) <- variable_labels[colnames(corr_mat2)]
-rownames(corr_mat2) <- variable_labels[rownames(corr_mat2)]
-
-# Melt the correlation matrix for ggplot2
-# Only keep the lower triangle of the matrix to avoid redundancy
-corr_mat_long <- as.data.frame(as.table(corr_mat2)) %>%
-  rename(Var1 = Var1, Var2 = Var2, value = Freq) %>%
-  mutate(Var1 = factor(Var1, levels = rev(unique(Var1))),
-         Var2 = factor(Var2, levels = unique(Var1))) %>%
-  filter(as.integer(Var2) <= as.integer(Var1))
-
-# Create your custom palette
-pal <- yarrr::friendly_pal("contrast_three", 50, type = "continuous")
-
-# Generate the plot directly with ggplot2 and assign to a variable
-p <- ggplot(data = corr_mat_long, aes(x = Var2, y = Var1, fill = value)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = round(value, 2)), size = 5) +
-  scale_fill_gradientn(
-    colors = pal,
-    limits = c(-1, 1),
-    name = "Correlation"
-  ) +
-  theme_minimal() +
-  coord_fixed() +
-  labs(title = "Correlation Plot") +
-  # Use scale_x_discrete and scale_y_discrete to control the labels
-  scale_x_discrete(labels = parse(text = levels(corr_mat_long$Var2))) +
-  scale_y_discrete(labels = parse(text = levels(corr_mat_long$Var1))) +
-  theme(
-    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 10),
-    axis.text.y = element_text(size = 10),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_rect(fill = "transparent"),
-    plot.background = element_rect(fill = "transparent", color = NA),
-    legend.position = "right"
-  )
-
-# Save the plot to the specified directory
-ggsave(
-  filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/corr plot.png",
-  plot = p,
-  width =12,
-  height = 8,
-  dpi = 500
-)
-
-
-# Print top 7 correlations of PD with other features (descending)
-pd_corrs <- corr_mat["PDDOY", colnames(corr_mat) != "PDDOY"]
-top7 <- sort(pd_corrs, decreasing = TRUE)[1:7]
-top7_rounded <- round(top7, 3)
-print(top7_rounded)
-# optional single-line print
-cat("Top 7 correlations with PD:", paste(names(top7_rounded), top7_rounded, collapse = "; "), "\n")
-
-
-
-
-
-corr_mat
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#OLD PLOTS
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#---------------------------------------------------------------
 
 ### plot some DOP and DOH data
 ## read the csv file
@@ -1567,3 +1967,263 @@ ggsave(
   height = 5,
   dpi = 300
 )
+
+
+
+
+
+#------------------------
+#OLD PLOT
+#-------------------------
+
+
+# p1_planting_pheno <- ggplot(plot1_df_planting_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "LIMP Random Forest", y = "Error") +
+#   scale_fill_manual(values = vg_colors) +   # ← Use Van Gogh colors
+#   theme_classic(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18)
+#   )
+# 
+# # === Plot 2: R² and Bias for Planting ===
+# p2_planting_pheno <- ggplot(plot2_df_planting_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "LIMP Random Forest", y = "Score") +
+#   scale_fill_manual(values = vg_colors) +   # ← Use Van Gogh colors
+#   theme_classic(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18)
+#   )
+# 
+# 
+# # === Plot 1: RMSE and MAE for Planting ===
+# p1_planting_deines <- ggplot(plot1_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Deines et al. 2023 features", y = "Error") +
+#   scale_fill_manual(values = vg_colors) +   # ← Use Van Gogh colors
+#   theme_classic(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18)
+#   )
+# 
+# # === Plot 2: R² and Bias for Planting ===
+# p2_planting_deines <- ggplot(plot2_df_planting_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Deines et al. 2023 features", y = "Score") +
+#   scale_fill_manual(values = vg_colors) +   # ← Use Van Gogh colors
+#   theme_classic(base_size = 14) +
+# 
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18)
+#   )
+# 
+# 
+# # Make 2x2 grid with labels
+# combined_plot <- plot_grid(
+# 
+#   p1_planting_deines, 
+#   p2_planting_deines,
+#   p1_planting_pheno, 
+#   p2_planting_pheno, 
+#   labels = c("A", "B", "C", "D"),  # panel labels
+#   label_size = 18,                 # label font size
+#   ncol = 2, nrow = 2
+# )
+# combined_plot
+# # Save to file
+# out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
+# outfile <- file.path(out_dir, "RF_Prediction_Results_Grid.png")
+# 
+# ggsave(outfile, plot = combined_plot, width = 14, height = 10, dpi = 300)
+#---------------------------------------------------------------------------
+#HARVEST
+#---------------------------------------------------------------------------
+# # === Plot 1: RMSE and MAE for Harvest ===
+# p1_harvest_deines <- ggplot(plot1_df_harvest_deines, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Harvesting: RMSE and MAE", y = "Error", x = "Metric") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# 
+# # === Plot 2: R² and Bias for Harvest ===
+# p2_harvest_deines <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "Harvesting: R² and Bias", y = "Value", x = "Metric") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# # === Plot 1: RMSE and MAE for Harvest ===
+# p1_harvest_pheno <- ggplot(plot1_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "LIMP Random Forest", y = "Error") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# 
+# # === Plot 2: R² and Bias for Harvest ===
+# p2_harvest_pheno <- ggplot(plot2_df_harvest_pheno, aes(x = Metric, y = Value, fill = Dataset)) +
+#   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+#   geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
+#                 position = position_dodge(width = 0.7),
+#                 width = 0.2, na.rm = TRUE) +
+#   geom_text(aes(label = ifelse(is.na(SD),
+#                                sprintf("%.2f", Value),
+#                                sprintf("%.2f ± %.2f", Value, SD))),
+#             position = position_dodge(width = 0.7),
+#             vjust = -0.8,
+#             size = 4.5) +
+#   labs(title = "LIMP Random Forest", y = "Score") +
+#   scale_fill_brewer(palette = "Set2") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     axis.title.x = element_text(size = 16),
+#     axis.title.y = element_text(size = 16),
+#     axis.text.x = element_text(size = 14),
+#     axis.text.y = element_text(size = 14),
+#     plot.title = element_text(size = 18, face = "bold")
+#   )
+# 
+# # Combine harvest plots into 2x2 grid
+# combined_harvest <- plot_grid(
+#   p1_harvest_pheno, 
+#   p2_harvest_pheno, 
+#   labels = c("A", "B"),  # panel labels
+#   label_size = 18,                 # label font size
+#   ncol = 2, nrow = 1
+# )
+# combined_harvest
+# # Save to file
+# out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
+# outfile <- file.path(out_dir, "RF_Harvest_Results_Grid.png")
+# 
+# ggsave(outfile, plot = combined_harvest, width = 14, height = 6, dpi = 300)
+
+
+#cor plot
+df_sos <- deinesharmonicminmaxdf %>%
+  left_join(phenology_df, by = "Field_Year")
+df_sos <- df_sos %>%
+  left_join(meteo_summary_df_sos, by = "Field_Year")
+df_sos <- df_sos %>%
+  rename(DOY_max_fit = DOY_max_fit.x) %>%  # remove .x suffix
+  select(-DOY_max_fit.y)                   # drop the .y column
+df_sos <- df_sos %>%
+  rename(
+    PDDOY = PDDOY.x,
+    HDDOY = HDDOY.x
+  ) %>%
+  select(
+    -PDDOY.y,
+    -HDDOY.y
+  )     # drop the .y column
+
+# Step 1: Add residuals
+df <- df %>%
+  mutate(
+    residual_ud        = UD.UD - PDDOY,
+    residual_greenup   = Greenup.Greenup - PDDOY,
+  )
+df_sos <- df_sos %>%
+  mutate(
+    residual_sos_deriv = SOS_deriv.sos - PDDOY,
+    residual_sos_trs   = SOS_trs.sos - PDDOY
+  )

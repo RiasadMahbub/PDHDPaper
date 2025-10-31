@@ -78,7 +78,8 @@ library(lubridate)    # Date handling
 library(pbapply)      # Progress bar apply functions
 library(furrr)        # Parallel processing
 library(data.table)   # Fast data operations
-plan(multisession)    # Use available cores for parallel processing
+#plan(multisession)    # Use available cores for parallel processing
+plan(multisession, workers =availableCores())
 library(purrr)
 library(parallel)
 library(pbapply)
@@ -390,8 +391,13 @@ convert_kelvin_to_celsius <- function(df, col_name = "SoilTMP0_10cm_inst") {
   }
   return(df)
 }
-
-
+# ==============================================
+# removevariables
+# ==============================================
+rm(meteo_list)
+rm(vi_list_gt20)
+rm(meteo_summary_list)
+rm(meteo_summary_listharvest)
 # ==============================================
 # DATA LOADING
 # ==============================================
