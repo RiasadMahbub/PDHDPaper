@@ -850,5 +850,71 @@ library(reprtree)
 reprtree:::plot.getTree(rf_model_planting, k = 3, depth = 5)  # Plot first tree, depth limited
 
 
+#-------------------------------------------------------
+#100 TREES
+#-------------------------------------------------------
+library(dplyr)
 
+results_planting_conv <- results_planting %>%
+  arrange(run) %>%
+  mutate(
+    cum_Val_RMSE = cumsum(Val_RMSE) / seq_along(Val_RMSE),
+    cum_Val_MAE  = cumsum(Val_MAE)  / seq_along(Val_MAE),
+    cum_Val_R2   = cumsum(Val_R2)   / seq_along(Val_R2)
+  )
+
+
+
+
+ggplot(results_planting_conv, aes(x = run, y = cum_Val_RMSE)) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  labs(
+    title = "Stabilization of Validation RMSE Across Repeated Runs",
+    x = "Number of Runs",
+    y = "Cumulative Mean Validation RMSE (days)"
+  ) +
+  theme_minimal(base_size = 14)
+
+p_mae <- ggplot(results_planting_conv, aes(run, cum_Val_MAE)) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  labs(x = "Runs", y = "Cumulative Mean MAE (days)") +
+  theme_minimal()
+
+p_r2 <- ggplot(results_planting_conv, aes(run, cum_Val_R2)) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  labs(x = "Runs", y = "Cumulative Mean R²") +
+  theme_minimal()
+
+p_mae
+p_r2
+
+# Change in cumulative RMSE after 80 vs 100 runs
+results_planting_conv %>%
+  filter(run %in% c(80, 100)) %>%
+  select(run, cum_Val_RMSE)
+library(randomForest)
+
+set.seed(123)
+rf_test <- randomForest(PDDOY ~ ., data = remaining_df_planting, ntree = 500, importance = TRUE)
+
+# Plot OOB error vs. number of trees
+plot(rf_test, main = "OOB Error vs Number of Trees")
+
+oob_rmse <- rf_test$mse  # vector of OOB MSE per tree
+oob_rmse_df <- data.frame(
+  Trees = 1:length(oob_rmse),
+  OOB_RMSE = sqrt(oob_rmse)
+)
+
+library(ggplot2)
+ggplot(oob_rmse_df, aes(Trees, OOB_RMSE)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  labs(title = "OOB RMSE vs Number of Trees",
+       x = "Number of Trees",
+       y = "OOB RMSE (days)") +
+  theme_minimal()
 

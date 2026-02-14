@@ -338,6 +338,17 @@ ggsave(
   units = "in"
 )
 
+# --- Save Plot 2 ---
+ggsave(
+  filename = "GDDDIvergenceGVIpresentation.jpeg",
+  plot = final_plot,
+  path = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure",
+  dpi = 300,
+  width = 20,
+  height = 8,
+  units = "in"
+)
+
 
 # Load necessary libraries
 library(ggplot2)
@@ -711,4 +722,37 @@ ggplot(all_sensors_data, aes(x = system.time_start, y = Value, color = Sensor)) 
     plot.title = element_text(size = 18),
     plot.subtitle = element_text(size = 14)
   )
+
+
+
+#-----------------------------------------------------------------------
+# Single Phenology Plot: PhenoTrs only (with 1:1 line)
+#-----------------------------------------------------------------------
+
+# Output file
+outfile <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/TRS2.jpeg"
+
+jpeg(
+  filename = outfile,
+  width = 6,
+  height = 5,
+  units = "in",
+  res = 300
+)
+
+# Plot PhenoTrs only
+par(mar = c(4, 4, 2, 1))
+PhenoTrs(x)
+
+# Add 1:1 line
+abline(a = 0, b = 1, lty = 2, lwd = 2, col = "black")
+
+# Axis labels
+mtext("Day of the year (Day)", side = 1, line = 2)
+mtext("kNDVI (unitless)", side = 2, line = 2)
+
+
+
+box()
+dev.off()
 

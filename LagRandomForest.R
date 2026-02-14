@@ -531,3 +531,42 @@ for (var in top30_vars) {
   }
 }
 
+
+#100 runs
+set.seed(42)
+n_runs <- 150
+rmse_vals <- numeric(n_runs)
+
+for (i in 1:n_runs) {
+  
+  idx <- sample(seq_len(nrow(df)), size = 0.8 * nrow(df))
+  train <- df[idx, ]
+  val   <- df[-idx, ]
+  
+  rf <- randomForest(
+    lagtrs ~ . - PDDOY,
+    data = train,
+    ntree = 100
+  )
+  
+  preds <- predict(rf, newdata = val)
+  rmse_vals[i] <- rmse(val$lagtrs, preds)
+}
+
+
+cum_rmse <- cumsum(rmse_vals) / seq_along(rmse_vals)
+
+df_conv <- data.frame(
+  Runs = 1:n_runs,
+  Cumulative_RMSE = cum_rmse
+)
+ggplot(df_conv, aes(x = Runs, y = Cumulative_RMSE)) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  labs(
+    title = "Stabilization of RMSE with Increasing Number of Runs",
+    x = "Number of Runs",
+    y = "Cumulative Mean RMSE"
+  ) +
+  theme_minimal()
+

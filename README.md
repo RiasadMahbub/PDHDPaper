@@ -123,12 +123,63 @@ R code
 1. OrganizeGroundData: 
 2. OrganizingHarvestDate
 3. ShapefilePDHD: Matching and Saving Shapefiles by Year 
-4. SatelliteNamePostProcessingGEE: analysis for PCA
-5. LSWIWT1: Plotting of the SG filter and different processes 
 
 
+OrganizingHarvestDate.R reads multi-year Isbell Farm Excel yield files, standardizes harvest date and field names, cleans inconsistencies, and merges them into a unified dataset with consistent FIELD_NAME, year, and FIELDNAME_YEAR identifiers for analysis.
+
+GroundTruth_PlantingHarvest_Processing.R ingests multi-source rice field datasets (ARVA, DWMRU, Matt Morris, Sullivan, Scott Matthews, Unilever, and Isbell Flying Records), standardizes field names and date formats, harmonizes planting (PD) and harvest (HD) dates into YEAR and DOY metrics, and outputs cleaned, source-labeled datasets ready for multi-year comparative analysis (2015–2024).
+
+Field_Shapefile_PDHD_Matching.R Standardizes naming and matches multi-farm field geometries (2015–2024) with ground-truth planting and harvest dates.
+Resolves spatial inconsistencies and geometry errors to produce harmonized datasets for Earth Engine and rice productivity modeling.
+
+InterSGPCA_Features.R
+A parallel-processed R pipeline for cleaning, daily interpolation, and Savitzky-Golay smoothing of paired meteorological and satellite-derived vegetation indices.
+
+DeinesminMaxExtraction2.R
+The model fits the kNDVI signal using the harmonic function $y = c + \sum (a_n \cos + b_n \sin)$.
+
+Phenofit.R
+Utilizes the phenofit package to apply multiple curve-fitting methods (AG, Beck, Elmore, Gu, Zhang) to kNDVI data, extracting critical transition dates like SOS (Start of Season) and EOS (End of Season).
+
+phenofitSequential.R
+If the parallel multisession approach encounters environment or memory issues, the script is designed to fall back to the sequential method (plan(sequential))
 
 
+RFE_OptimumNumberOfPlots.R
+Executes Recursive Feature Elimination (RFE) to isolate the most influential phenological and environmental predictors for rice management events. RFE with 5-fold repeated cross-validation to minimize RMSE.
 
+rf_phenology_method_KFOLDVALIDATION.R
+The modeling framework utilizes a Monte Carlo design that executes 100 randomized iterations using a 60/20/20 split (Train/Validation/Fixed Test) to ensure that all performance metrics are statistically stable and free from sampling bias. This stability-driven approach specifically tracks the convergence of cumulative RMSE and MAE across every run, confirming that the consensus model reaches a reliable steady-state for Arkansas rice fields.  Finally, the script identifies aggregate importance by ranking predictors based on their average %IncMSE over the entire 100-run ensemble, effectively isolating the most robust environmental and phenological drivers of rice management.
 
+rf_deines_method_KFOLDVALIDATION.R
+This script automates the Deines Method implementation by calculating the Green Chlorophyll Vegetation Index (GCVI) and fitting robust harmonic regressions to multiple spectral bands. By integrating multi-band Fourier coefficients (a1​,b1​,c) with season-specific meteorological aggregates (e.g., April–June precipitation and GDD), it generates the high-dimensional feature matrix required for Random Forest yield modeling. The workflow ensures spatial-temporal consistency by merging satellite phenology with climate drivers into a single, wide-format dataset ready for Arkansas-wide rice productivity analysis.
 
+rf_deines_method_KFOLDVALIDATION.R
+This Monte Carlo validation framework executes 100 randomized iterations with a 60/20/20 data split to ensure performance metrics are statistically stable and free from sampling bias. By tracking the convergence of cumulative RMSE and MAE, the pipeline confirms that the consensus model reaches a reliable steady-state for Arkansas rice fields.  Finally, it isolates the most robust environmental and phenological drivers of rice management by ranking predictors based on their average %IncMSE across the entire 100-run ensemble.
+
+Presentation_GeneralPlottingDataDOPDOH.R
+AnimationsForPresentation.R
+Creates graphs for presentation 
+
+GeneralPlottingDataDOPDOH.R
+Creates graphs for manuscript file
+
+writingFromCodePDHD.R
+exports lines for the manuscript paper
+
+ModelExplanation.R
+Extra codes to understand the model
+
+LagRandomForest.R
+
+Doub_Logis_First.R
+
+optimalcurvepddoywithcummeteo.R
+
+optimalcurvekndvigdd.R
+
+optimalcurveHDDOY.R
+
+Doub_Logis_First_KFOLD.R
+
+Doub_Logis_First_KFOLD_Phenotfit.R

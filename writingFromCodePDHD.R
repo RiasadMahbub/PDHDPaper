@@ -721,3 +721,61 @@ print(PD_line)
 print(HD_line)
 
 
+#---------------------------------------------------]
+#MONTHS OF PD
+#---------------------------------------------------
+# ------------------------------------------------------------
+# Identify DOY ranges for Early, Mid, Late planting groups
+# ------------------------------------------------------------
+
+# Get quantile breaks you used earlier
+pd_breaks <- quantile(df$PDDOY, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+
+pd_breaks
+
+# Create a helper function to convert DOY → month name
+doy_to_month <- function(doy) {
+  as.character(format(as.Date(doy - 1, origin = "2025-01-01"), "%B"))
+}
+
+# Convert breakpoints to month labels
+month_labels <- sapply(pd_breaks, doy_to_month)
+
+month_labels
+
+# Create readable ranges
+early_range <- paste0(pd_breaks[1], "–", pd_breaks[2], 
+                      " (", month_labels[1], "–", month_labels[2], ")")
+
+mid_range   <- paste0(pd_breaks[2], "–", pd_breaks[3], 
+                      " (", month_labels[2], "–", month_labels[3], ")")
+
+late_range  <- paste0(pd_breaks[3], "–", pd_breaks[4], 
+                      " (", month_labels[3], "–", month_labels[4], ")")
+
+# Print narrative summary
+cat("\nPLANTING DATE GROUPS BY MONTH RANGE\n")
+cat("Early-planted fields: DOY ", early_range, "\n")
+cat("Mid-planted fields:   DOY ", mid_range, "\n")
+cat("Late-planted fields:  DOY ", late_range, "\n\n")
+
+
+
+####################
+#Scott Matthews report
+####################
+total_rows <- nrow(combined_data)
+seeding_rows <- sum(combined_data$source == "seeding_rice_data")
+
+total_rows
+seeding_rows
+
+cat("Total is", nrow(combined_data), "and Scott Matthews provided this seedling data.\n")
+cat(
+  "Total is", nrow(combined_data),
+  "and Scott Matthews provided this seedling data (",
+  sum(combined_data$source == "seeding_rice_data"), "records ).\n",
+  sep = " "
+)
+
+

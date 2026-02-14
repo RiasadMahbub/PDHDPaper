@@ -149,7 +149,8 @@ stats <- df %>%
 # Plot PDMaxdays
 p1 <- ggplot(df, aes(x = PDMaxdays)) +
   geom_histogram(fill = color_map["PDMaxdays"], color = "white", bins = 30) +
-  labs( x = "Time to peak (kNDVImax) to PD", y = "Count") +
+  labs(  x = expression("Time to peak (" * italic(k) * "NDVI"[max] * ") to PD (day)"),
+        y = "Count") +
   theme_classic(base_size = 12) +
   annotate(
     "text",
@@ -171,7 +172,8 @@ p1 <- ggplot(df, aes(x = PDMaxdays)) +
 # Plot HDMaxdays
 p2 <- ggplot(df, aes(x = HDMaxdays)) +
   geom_histogram(fill = color_map["HDMaxdays"], color = "white", bins = 30) +
-  labs( x = "Time to peak (kNDVImax) to HD", y = "Count") +
+  labs(  x = expression("Time to peak (" * italic(k) * "NDVI"[max] * ") to HD (day)"),
+        y = "Count") +
   theme_classic(base_size = 12) +
   annotate(
     "text",
@@ -244,7 +246,7 @@ lagall <- ggplot(df_long, aes(x = LagValue, y = gsl, color = LagType)) +
   scale_x_continuous(breaks = seq(-40, max(df_long$LagValue, na.rm = TRUE), by = 20)) +
   scale_y_continuous(breaks = seq(0, max(df_long$gsl, na.rm = TRUE), by = 25)) +
   labs(
-    x = "Lag (days)",
+    x = "Lag (day)",
     y = "Growing season length (HD–PD)",
     color = NULL
   ) +
@@ -512,7 +514,7 @@ p4 <- ggplot(phenology_df, aes(x = PDDOY, y = Greenup.Greenup)) +
   scale_y_continuous(breaks = seq(0, 400, 20)) +
   annotate("text", x = 82, y = max(phenology_df$Greenup.Greenup, na.rm = TRUE),
            label = "D", hjust = 0, vjust = 1.2, size = 5, fontface = "bold") +
-  annotate("text", x = 140, y = 60,
+  annotate("text", x = 140, y = 40,
            label = label4, hjust = 0, vjust = 0) +
   custom_theme
 
@@ -690,7 +692,6 @@ vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
 # Select colors 1, 3, and 5
 vg_colors <- vvg_colors[c(1, 3, 5)]
 
-
 # --- Ensure Dataset factor levels
 library(ggplot2)
 library(dplyr)
@@ -718,38 +719,38 @@ y_bias_range <- c(-2,2)
 # --- Function for RMSE+MAE
 make_rmse_mae_plot <- function(df, title, y_range) {
   ggplot(df, aes(x = Metric, y = Value, fill = Dataset)) +
-    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_col(position = position_dodge(width = 0.8), width = 0.7) +
     geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD),
-                  position = position_dodge(width = 0.7), width = 0.2, na.rm = TRUE) +
+                  position = position_dodge(width = 0.8), width = 0.2, na.rm = TRUE) +
     geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
                                  sprintf("%.2f ± %.1f", Value, SD))),
-              position = position_dodge(width = 0.7), vjust = -2.5, size = 6) +
+              position = position_dodge(width = 1), vjust = -2.5, size =7 ) +
     scale_fill_manual(values = vg_colors) +
     scale_y_continuous(limits = y_range, breaks = seq(0, 12, 4)) +  # explicit ticks 0,4,8,12
     labs(title = title, y = "Error", x = "") +
-    theme_classic(base_size = 16) +
+    theme_classic(base_size = 17) +
     theme(axis.title.y = element_text(size = 24),
           axis.text.y = element_text(size = 18),
           axis.text.x = element_text(size = 18),
-          plot.title = element_text(size = 18))
+          plot.title = element_text(size = 17))
 }
 
 # --- Function for R² or Bias
-make_score_plot <- function(df, y_label, title, y_range, vjust_text = -0.8) {
+make_score_plot <- function(df, y_label, title, y_range, vjust_text = -3) {
   ggplot(df, aes(x = Dataset, y = Value, fill = Dataset)) +
-    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.7) +
     geom_errorbar(aes(ymin = Value - SD, ymax = Value + SD), width = 0.2, na.rm = TRUE) +
     geom_text(aes(label = ifelse(is.na(SD), sprintf("%.2f", Value),
                                  sprintf("%.2f ± %.1f", Value, SD))),
-              vjust = vjust_text, size = 6) +
+              vjust = vjust_text, size = 6.5) +
     scale_fill_manual(values = vg_colors) +
     scale_y_continuous(limits = y_range) +
     labs(title = title, y = y_label, x = "") +
-    theme_classic(base_size = 16) +
+    theme_classic(base_size = 17) +
     theme(axis.title.y = element_text(size = 22),
           axis.text.y = element_text(size = 18),
           axis.text.x = element_text(size = 18),
-          plot.title = element_text(size = 16))
+          plot.title = element_text(size = 17))
 }
 
 # --- R² y-axis label
@@ -769,7 +770,7 @@ p1 <- make_rmse_mae_plot(plot1_rmse_mae_df, title = expression(PD[SOSDER] ~ ": M
 p2 <- make_score_plot(plot2_r2_df, y_label = r2_label,
                       title = expression(PD[SOSDER] ~ ": " * italic(R)^2),
                       y_range = y_r2_range,
-                      vjust_text = 2.3) +
+                      vjust_text = 3) +
   theme(legend.position = "none",
         axis.text.x  = element_blank(),
         axis.title.x = element_blank())
@@ -777,7 +778,7 @@ p2 <- make_score_plot(plot2_r2_df, y_label = r2_label,
 p3 <- make_score_plot(plot2_bias_df, y_label = "Bias (day)",
                       title = expression(PD[SOSDER] ~ ": Bias"),
                       y_range = y_bias_range,
-                      vjust_text = -2) +
+                      vjust_text = -3.5) +
   theme(legend.position = "none",
         axis.text.x  = element_blank(),
         axis.title.x = element_blank())
@@ -842,13 +843,13 @@ combined_3x3 <- plot_grid(
   label_x = 0.95,
   label_y = 0.95
 )
-
+# --- Show
+combined_3x3
 # --- Save
 outfile <- file.path(out_dir, "Random Forest_Planting_9plots_Grid_LegendInside.png")
 ggsave(outfile, plot = combined_3x3, width = 22, height = 16, dpi = 200)
 
-# --- Show
-combined_3x3
+
 #---------------------------------------------------------------------------
 # HARVEST PLOTS — LIMP (Pheno) Random Forest only
 #---------------------------------------------------------------------------
@@ -979,7 +980,7 @@ combined_pheno_plot
 # --- Save
 out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
 outfile <- file.path(out_dir, "RF_Harvest_Pheno_3plots_Grid_LegendBottom_Labeled.png")
-ggsave(outfile, plot = combined_pheno_plot, width = 18, height = 6, dpi = 200)
+ggsave(outfile, plot = combined_pheno_plot, width = 16, height = 5, dpi = 200)
 
 #---------------------------------------------------------------
 #Features used to predict PD 
@@ -2227,3 +2228,24 @@ df_sos <- df_sos %>%
     residual_sos_deriv = SOS_deriv.sos - PDDOY,
     residual_sos_trs   = SOS_trs.sos - PDDOY
   )
+library(ggplot2)
+
+# Quantile breaks
+pd_quantiles <- quantile(df$PDDOY, probs = c(0, 0.33, 0.66, 0.99), na.rm = TRUE)
+
+# Create a single box for the whole range
+ggplot(df, aes(x = 1, y = PDDOY)) +
+  geom_boxplot(width = 0.3, fill = "lightblue", outlier.shape = NA) +  # full box
+  labs(title = "Planting Date Distribution", x = "", y = "Day of Year (DOY)") +
+  theme_minimal(base_size = 16) +  # increase font size
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  # Add vertical lines for 33%, 66%, 99% quantiles
+  geom_hline(yintercept = pd_quantiles[2], linetype = "dashed", color = "red", size = 1) +
+  geom_hline(yintercept = pd_quantiles[3], linetype = "dashed", color = "orange", size = 1) +
+  geom_hline(yintercept = pd_quantiles[4], linetype = "dashed", color = "blue", size = 1) +
+  # Add labels for the marks, pushed to the left
+  annotate("text", x = 1, y = pd_quantiles[2], label = "33% (Early)", color = "red", hjust = 1, size = 6) +
+  annotate("text", x = 1, y = pd_quantiles[3], label = "66% (Mid)", color = "orange", hjust = 1, size = 6) +
+  annotate("text", x = 1, y = pd_quantiles[4], label = "99% (Late)", color = "blue", hjust = 1, size = 6)
+
