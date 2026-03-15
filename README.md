@@ -496,15 +496,6 @@ Data used in this study covers:
 ```
 2008–2020
 ```
-
----
-
-# Portfolio
-
-Project portfolio and related work:
-
-https://riasadmahbub.github.io/
-
 ---
 
 # Author
