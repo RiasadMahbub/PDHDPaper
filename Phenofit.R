@@ -12,6 +12,8 @@ library(ggplot2)
 library(gridExtra)  # For arranging multiple plots
 # Load and use it to update R
 library(installr)
+library(R.utils)
+library(lubridate)
 # Check RStudio version
 rstudioapi::versionInfo()
 
@@ -121,7 +123,6 @@ print(phenology_df)
 ####################################################
 
 #----------------------------------------------------
-
 # Optional: use more threads
 #plan(multisession, workers = parallel::detectCores() - 1)
 example(future)
@@ -198,6 +199,93 @@ progressr::with_progress({
 # Combine results into single dataframe
 phenology_df <- bind_rows(phenology_list)
 
+
+#--------------------------------------------------
+#OLDER PHENOFIT DOES NOT WORK THIS ONE WORKS NOW
+#-----------------------------------------------
+plan(sequential)  # Kill current workers first
+plan(multisession, workers = availableCores() - 1)
+progressr::with_progress({
+  p <- progressor(steps = length(vi_list_gt20))
+  
+  extract_phenology <- function(vi) {
+    p()  # increment progress bar
+    
+    dates <- as.Date(vi$Date)
+    ndvi  <- vi$kNDVI
+    
+    # Skip if insufficient data
+    if (all(is.na(ndvi)) || length(ndvi) < 5) return(NULL)
+    
+    t    <- as.numeric(format(dates, "%j"))
+    tout <- 1:300
+    methods <- c("AG", "Beck", "Elmore", "Gu", "Zhang")
+    
+    # Wrap entire processing block — catches both errors AND hangs (timeout)
+    result <- tryCatch({
+      R.utils::withTimeout({
+        
+        fit <- curvefit(ndvi, t, tout, methods)
+        x   <- fit$model$AG
+        if (is.null(x)) return(NULL)
+        
+        safe_extract <- function(f, x) tryCatch(f(x), error = function(e) rep(NA, 4))
+        trs    <- safe_extract(PhenoTrs, x)
+        der    <- safe_extract(PhenoDeriv, x)
+        gu     <- safe_extract(PhenoGu, x)
+        kl     <- safe_extract(PhenoKl, x)
+        params <- tryCatch(x$par["nlminb", ], error = function(e) rep(NA, 7))
+        
+        phenology_row <- c(
+          Model      = "AG",
+          SOS_trs    = trs["sos"],
+          EOS_trs    = trs["eos"],
+          SOS_deriv  = der["sos"],
+          POS        = der["pos"],
+          EOS_deriv  = der["eos"],
+          UD         = gu["UD"],
+          SD         = gu["SD"],
+          DD         = gu["DD"],
+          RD         = gu["RD"],
+          Greenup    = kl["Greenup"],
+          Maturity   = kl["Maturity"],
+          Senescence = kl["Senescence"],
+          Dormancy   = kl["Dormancy"],
+          t0         = params["t0"],
+          mn         = params["mn"],
+          mx         = params["mx"],
+          rsp        = params["rsp"],
+          a3         = params["a3"],
+          rau        = params["rau"],
+          a5         = params["a5"]
+        )
+        
+        df        <- as.data.frame(t(phenology_row), stringsAsFactors = FALSE)
+        df[, -1]  <- lapply(df[, -1], as.numeric)
+        df$PDDOY      <- if ("PDDOY"      %in% names(vi)) vi$PDDOY[1]      else NA
+        df$HDDOY      <- if ("HDDOY"      %in% names(vi)) vi$HDDOY[1]      else NA
+        df$Field_Year <- if ("Field_Year" %in% names(vi)) vi$Field_Year[1] else NA
+        df
+        
+      }, timeout = 30, onTimeout = "warning")  # kill if >30 sec
+      
+    }, 
+    error   = function(e) NULL,   # curvefit errors → skip
+    warning = function(w) NULL    # timeout warnings → skip
+    )
+    
+    return(result)
+  }
+  
+  phenology_list <- future_map(
+    vi_list_gt20,
+    extract_phenology,
+    .options = furrr_options(seed = TRUE)
+  )
+})
+# Combine results into single dataframe
+phenology_df <- bind_rows(phenology_list)
+
 # End timing
 end_time <- Sys.time()
 cat("✅ Completed in", round(difftime(end_time, start_time, units = "mins"), 2), "minutes\n")
@@ -219,31 +307,20 @@ library(stringr)
 
 # --- Function 1: Merge phenology info + add kNDVISOSderiv safely
 add_pheno_and_kndvi <- function(merged_list, phenology_df) {
-  
   merged_list <- lapply(merged_list, function(df) {
-    if ("Field_Year" %in% colnames(df)) {
-      
-      # Remove old duplicate columns (if exist)
+    if ("Field_Year" %in% colnames(df)) { # Remove old duplicate columns (if exist)
       df <- df %>%
         select(-matches("\\.x$|\\.y$"))  # drop old merged columns like UD.UD.x, .y, etc.
-      
-      # Join new phenology data
-      df <- df %>%
+      df <- df %>%  # Join new phenology data
         left_join(
           phenology_df %>% select(Field_Year, UD.UD, DD.DD, SOS_deriv.sos, EOS_deriv.eos, POS.pos),
           by = "Field_Year"
         )
-      
-      # Get Field-Year
-      fy <- unique(df$Field_Year)
-      
-      # Get SOS_deriv.sos DOY
-      sos_doy <- phenology_df %>%
+      fy <- unique(df$Field_Year)      # Get Field-Year
+      sos_doy <- phenology_df %>%      # Get SOS_deriv.sos DOY
         dplyr::filter(Field_Year == fy) %>%
         pull(SOS_deriv.sos)
-      
-      # Add kNDVISOSderiv value
-      if (length(sos_doy) == 1 && !is.na(sos_doy)) {
+      if (length(sos_doy) == 1 && !is.na(sos_doy)) {      # Add kNDVISOSderiv value
         if (all(c("doy", "kNDVI") %in% names(df))) {
           closest_index <- which.min(abs(df$doy - sos_doy))
           df$kNDVISOSderiv <- df$kNDVI[closest_index]
@@ -254,17 +331,12 @@ add_pheno_and_kndvi <- function(merged_list, phenology_df) {
         df$kNDVISOSderiv <- NA
       }
     }
-    
-    # Clean up any duplicate suffixes again, just in case
     df <- df %>%
       rename_with(~ str_remove(., "\\.x$|\\.y$"))
-    
     return(df)
   })
-  
   return(merged_list)
 }
-
 # --- Function 2: Check column presence
 check_phenology_columns <- function(merged_list) {
   lapply(names(merged_list), function(field_id) {
@@ -284,161 +356,248 @@ check_phenology_columns <- function(merged_list) {
 # --- Run them
 merged_list <- add_pheno_and_kndvi(merged_list, phenology_df)
 check_cols <- check_phenology_columns(merged_list)
-# Convert to data frame for easier viewing
-check_cols_df <- do.call(rbind, lapply(check_cols, as.data.frame))
-
+check_cols_df <- do.call(rbind, lapply(check_cols, as.data.frame))    # Clean up any duplicate suffixes again, just in case
 print(check_cols_df)
 
-
 # list of soil indices
-soil_indices <- c("AFRI1600", "AFRI2100", "ARVI", "ATSAVI", "BCC", "BNDVI", "BWDRVI", "CIG", "CVI",
-                  "DSI", "DSWI1", "DSWI2", "DSWI3", "DSWI4", "DSWI5", "DVI",
-                  "ENDVI", "EVI", "EVI2", "EVIv", "ExG", "ExGR", "ExR","FCVI", 
+soil_indices <- c(#"AFRI1600", "AFRI2100", "ARVI", "ATSAVI", "BCC", "BNDVI", "BWDRVI", "CIG", "CVI",
+                  #"DSI", "DSWI1", "DSWI2", "DSWI3", "DSWI4", "DSWI5", "DVI",
+                  #"ENDVI", "EVI", "EVI2", "EVIv", "ExG", "ExGR", "ExR","FCVI", 
                   "GARI", "GBNDVI", "GCC", "GDVI", "GEMI", "GLI", "GNDVI", "GOSAVI", "GRNDVI", "GRVI", "GSAVI", 
-                  "GVMI","IAVI", "IKAW", "IPVI",
-                  "MCARI1", "MCARI2", "MGRVI", "MNDVI", "MNLI", "MRBVI", "MSAVI", "MSI", "MSR", "MTVI1", "MTVI2",
+                  #"GVMI","IAVI", "IKAW", "IPVI",
+                  #"MCARI1", "MCARI2", "MGRVI", "MNDVI", "MNLI", "MRBVI", "MSAVI", "MSI", "MSR", "MTVI1", "MTVI2",
                   "NDDI",  "NDII", "NDMI", "NDPI", "NDVI", "NDYI", "NGRDI", "NIRv", 
-                  "NLI", "NMDI", "NRFIg", "NRFIr", "NormG", "NormNIR", "NormR", 
-                  "OCVI", "OSAVI", "RCC", "RDVI", "RGBVI", "RGRI", "RI",
-                  "SARVI", "SAVI", "SAVI2", "SEVI", "SI",  "SLAVI", "SR", "SR2", 
-                  "TDVI", "TGI", "TSAVI", "TVI", "TriVI", "VARI", "VIG", "WDRVI", "WDVI",
-                  "bNIRv", "sNIRvLSWI", "sNIRvNDPI", "sNIRvNDVILSWIP", "sNIRvNDVILSWIS", "sNIRvSWIR",
-                  "ANDWI", "AWEInsh", "AWEIsh",  "LSWI", "MBWI", "MLSWI26", "MLSWI27", "MNDWI", "MuWIR", 
-                  "NDPonI", "NDTI", "NDVIMNDWI", "NDWI", "NDWIns", "NWI", "OSI", "PI",
-                  "RNDVI", "SWM", "WI1", "WI2", "WI2015", "WRI", "BI", "BITM", "BIXS",
-                  "BaI", "DBSI", "EMBI", "MBI", "NDSoI", "NSDS", "NSDSI1", "NSDSI2", "NSDSI3",
+                  #"NLI", "NMDI", "NRFIg", "NRFIr", "NormG", "NormNIR", "NormR", 
+                  #"OCVI", "OSAVI", "RCC", "RDVI", "RGBVI", "RGRI", "RI",
+                  #"SARVI", "SAVI", "SAVI2", "SEVI", "SI",  "SLAVI", "SR", "SR2", 
+                  #"TDVI", "TGI", "TSAVI", "TVI", "TriVI", "VARI", "VIG", "WDRVI", "WDVI",
+                  #"bNIRv", "sNIRvLSWI", "sNIRvNDPI", "sNIRvNDVILSWIP", "sNIRvNDVILSWIS", "sNIRvSWIR",
+                  #"ANDWI", "AWEInsh", "AWEIsh",  "LSWI", "MBWI", "MLSWI26", "MLSWI27", "MNDWI", "MuWIR", 
+                  #"NDPonI", "NDTI", "NDVIMNDWI", "NDWI", "NDWIns", "NWI", "OSI", "PI",
+                  #"RNDVI", "SWM", "WI1", "WI2", "WI2015", "WRI", "BI", "BITM", "BIXS",
+                  #"BaI", "DBSI", "EMBI", "MBI", "NDSoI", "NSDS", "NSDSI1", "NSDSI2", "NSDSI3",
                   "RI4XS", "kIPVI", "kNDVI", "kRVI", "nir")
-
 # Remove "Dewitt_2_2023" from merged_list
 merged_list[["Dewitt_2_2023"]] <- NULL
+window_mode <- "sos_deriv"   # field-specific, anchored at SOS_deriv.sos
+window_mode <- "fixed"       # every field uses DOY 163–193
+# =========================================================
+# SWITCH: set to "sos_deriv" or "fixed"
+# =========================================================
+window_mode <- "sos_deriv"   # <-- change to "fixed" to use DOY 193
+window_mode <- "fixed"       # every field uses DOY 163–193
+fixed_doy   <- 193           # only used when window_mode = "fixed"
+window_days <- 30            # window width (days before anchor)
+
+# =========================================================
+# METEO SUMMARY — single function, both modes
+# =========================================================
 meteo_summary_list <- lapply(names(merged_list), function(field_id) {
   df <- merged_list[[field_id]]
   df$Date <- as.Date(df$Date)
-  df$DOY <- yday(df$Date)
-  #Get DOY_max_fit from the same dataframe
-  # doy_max <- unique(df$UD.UD)
-  # if(length(doy_max) != 1 || is.na(doy_max)) {
-  #   doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
-  # }
-  doy_max<-193
-  # Define 45-day window
-  start_doy <- doy_max - 30
-  end_doy <- doy_max
-  df_window <- df %>%
-    dplyr::filter(DOY >= start_doy & DOY <= end_doy)
+  df$DOY  <- yday(df$Date)
+  # ---- Year-level cumulatives (always full year) ----
+  year_features <- df %>%
+    dplyr::summarise(
+      yearcumtmean = sum(tmean, na.rm=TRUE),
+      yearcumgdd   = sum(gdd,   na.rm=TRUE),
+      yearcumvpd   = sum(vpd,   na.rm=TRUE),
+      yearcumtmin  = sum(tmin,  na.rm=TRUE),
+      yearcumtmax  = sum(tmax,  na.rm=TRUE),
+      yearcumrh    = sum(avgRH, na.rm=TRUE),
+      yearcumrad   = sum(srad,  na.rm=TRUE)
+    )
+  # ---- Anchor DOY: SOS_deriv or fixed 193 ----
+  if (window_mode == "sos_deriv") {
+    sos_val <- unique(df$SOS_deriv.sos)
+    sos_val <- sos_val[!is.na(sos_val)][1]
+    if (is.na(sos_val) || length(sos_val) == 0) {
+      warning(sprintf("Field %s: SOS_deriv.sos is NA — skipping.", field_id))
+      return(NULL)
+    }
+    doy_max <- as.integer(round(sos_val))
+  } else {
+    doy_max <- fixed_doy
+  }
   
-  # ---- compute soil index means within the window ----
+  start_doy <- doy_max - window_days
+  end_doy   <- doy_max
+  
+  df_window <- df %>% dplyr::filter(DOY >= start_doy & DOY <= end_doy)
+  
+  if (nrow(df_window) == 0) {
+    warning(sprintf("Field %s: empty window DOY %d–%d.", field_id, start_doy, end_doy))
+    return(NULL)
+  }
+  
+  # ---- Soil means ----
   soil_means <- df_window %>%
-    dplyr::summarise(across(all_of(soil_indices), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"))
+    dplyr::summarise(across(all_of(soil_indices),
+                            ~ mean(.x, na.rm=TRUE),
+                            .names="mean_{.col}"))
   
-  # ---- compute DOY of maximum rate of change within the window ----
+  # ---- Soil derivatives ----
   soil_doys <- lapply(soil_indices, function(idx) {
     vals <- df_window[[idx]]
-    if (all(is.na(vals))) return(NA)  # skip if missing
-    rate <- diff(vals) / diff(df_window$DOY)  # approximate derivative
-    max_doy <- df_window$DOY[-1][which.max(abs(rate))]  # DOY where max change occurs
-    return(max_doy)
+    if (all(is.na(vals))) return(NA)
+    rate <- diff(vals) / diff(df_window$DOY)
+    df_window$DOY[-1][which.max(abs(rate))]
   }) %>%
     setNames(paste0("DOY_maxROC_", soil_indices)) %>%
     as_tibble()
   
-  # ---- weather cumulative + soil averages ----
+  # ---- Window cumulatives ----
   df_summary <- df_window %>%
     dplyr::summarise(
-      cum_tmean     = sum(tmean, na.rm = TRUE),
-      cum_gdd       = sum(gdd, na.rm = TRUE),
-      cum_meansrad  = sum(srad, na.rm = TRUE),
-      cumGDVI       = sum(GDVI, na.rm = TRUE),
-      cumRNDVI      = sum(Lai, na.rm = TRUE),
-      cumkNDVI       = sum(kNDVI, na.rm = TRUE),
-      cum_vpd       = sum(vpd, na.rm = TRUE),
-      cum_tmin      = sum(tmin, na.rm = TRUE),
-      cum_tmax      = sum(tmax, na.rm = TRUE),
-      cum_RH        = sum(avgRH, na.rm = TRUE),
-      cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
-      avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
-      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE),
-      kNDVISOSderiv = unique(kNDVISOSderiv, na.rm = TRUE)
+      cum_tmean    = sum(tmean,              na.rm=TRUE),
+      cum_gdd      = sum(gdd,                na.rm=TRUE),
+      cum_meansrad = sum(srad,               na.rm=TRUE),
+      cumGDVI      = sum(GDVI,               na.rm=TRUE),
+      cumRNDVI     = sum(Lai,                na.rm=TRUE),
+      cumkNDVI     = sum(kNDVI,              na.rm=TRUE),
+      cum_vpd      = sum(vpd,                na.rm=TRUE),
+      cum_tmin     = sum(tmin,               na.rm=TRUE),
+      cum_tmax     = sum(tmax,               na.rm=TRUE),
+      cum_RH       = sum(avgRH,              na.rm=TRUE),
+      cum_soiltemp = sum(SoilTMP0_10cm_inst, na.rm=TRUE),
+      avgsoilorg   = mean(SOC_avg_0_30cm,    na.rm=TRUE),
+      avgsoilclay  = mean(Clay_avg_0_30cm,   na.rm=TRUE),
+      kNDVISOSderiv = unique(kNDVISOSderiv,  na.rm=TRUE)
     ) %>%
     dplyr::mutate(
-      Field_ID = field_id,
-      DOY_max_fit = doy_max
+      Field_ID    = field_id,
+      DOY_max_fit = doy_max,
+      window_mode = window_mode      # track which mode was used
     ) %>%
-    dplyr::select(Field_ID, DOY_max_fit, everything()) %>%
-    bind_cols(soil_means, soil_doys) %>%  # attach soil stats
+    dplyr::select(Field_ID, DOY_max_fit, window_mode, everything()) %>%
+    bind_cols(year_features, soil_means, soil_doys) %>%
     as_tibble()
   
   return(df_summary)
 })
+
+meteo_summary_list <- Filter(Negate(is.null), meteo_summary_list)
+cat(sprintf("✓ Built %d field summaries using window_mode = '%s'\n",
+            length(meteo_summary_list), window_mode))
+meteo_summary_list <- Filter(Negate(is.null), meteo_summary_list)# Drop any NULLs from fields that had no valid SOS or empty windows
+meteo_summary_list <- Filter(Negate(is.null), meteo_summary_list)
+
+# ---- Report window used ----
+anchor_vals <- sapply(meteo_summary_list, function(x) x$DOY_max_fit)
+cat(sprintf("\n✓ %d fields processed | window_mode = '%s'\n",
+            length(meteo_summary_list), window_mode))
+if (window_mode == "fixed") {
+  cat(sprintf("   Anchor: fixed DOY %d | Window: DOY %d–%d\n",
+              fixed_doy, fixed_doy - window_days, fixed_doy))
+} else {
+  cat(sprintf("   Anchor: SOS_deriv.sos per field\n"))
+  cat(sprintf("   DOY_max_fit range: %d – %d (mean=%.1f)\n",
+              min(anchor_vals), max(anchor_vals),
+              mean(anchor_vals)))
+}
+
 meteo_summary_list[[1]]$cum_meansrad
 meteo_summary_list[[1]]$cum_RH
 meteo_summary_listharvest <- lapply(names(merged_list), function(field_id) {
-  df <- merged_list[[field_id]]
   
+  df <- merged_list[[field_id]]
   df$Date <- as.Date(df$Date)
-  df$DOY <- yday(df$Date)
-  # Get DOY_max_fit from the same dataframe
+  df$DOY  <- yday(df$Date)
+  
+  # =========================================================
+  # YEAR-LEVEL CUMULATIVES — ADD THIS BLOCK (was missing)
+  # =========================================================
+  year_features <- df %>%
+    dplyr::summarise(
+      yearcumtmean = sum(tmean, na.rm=TRUE),
+      yearcumgdd   = sum(gdd,   na.rm=TRUE),
+      yearcumvpd   = sum(vpd,   na.rm=TRUE),
+      yearcumtmin  = sum(tmin,  na.rm=TRUE),
+      yearcumtmax  = sum(tmax,  na.rm=TRUE),
+      yearcumrh    = sum(avgRH, na.rm=TRUE),
+      yearcumrad   = sum(srad,  na.rm=TRUE)
+    )
+  
+  # =========================================================
+  # HARVEST WINDOW: DD.DD to DD.DD + 60
+  # =========================================================
   doy_max <- unique(df$DD.DD)
-  if(length(doy_max) != 1 || is.na(doy_max)) {
-    doy_max <- max(df$DOY, na.rm = TRUE) # fallback if missing
+  if (length(doy_max) != 1 || is.na(doy_max)) {
+    doy_max <- max(df$DOY, na.rm=TRUE)
   }
   
-  # Define 45-day window
   start_doy <- doy_max
-  end_doy <- doy_max + 60
+  end_doy   <- doy_max + 60
+  
   df_window <- df %>%
     dplyr::filter(DOY >= start_doy & DOY <= end_doy)
   
-  # ---- compute soil index means within the window ----
-  soil_means <- df_window %>%
-    dplyr::summarise(across(all_of(soil_indices), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"))
+  if (nrow(df_window) == 0) {
+    warning(sprintf("Field %s: empty harvest window.", field_id))
+    return(NULL)
+  }
   
-  # ---- compute DOY of maximum rate of change within the window ----
+  # ---- Soil means ----
+  soil_means <- df_window %>%
+    dplyr::summarise(across(all_of(soil_indices),
+                            ~ mean(.x, na.rm=TRUE),
+                            .names="mean_{.col}"))
+  
+  # ---- Soil derivatives ----
   soil_doys <- lapply(soil_indices, function(idx) {
     vals <- df_window[[idx]]
-    if (all(is.na(vals))) return(NA)  # skip if missing
-    rate <- diff(vals) / diff(df_window$DOY)  # approximate derivative
-    max_doy <- df_window$DOY[-1][which.max(abs(rate))]  # DOY where max change occurs
-    return(max_doy)
+    if (all(is.na(vals))) return(NA)
+    rate <- diff(vals) / diff(df_window$DOY)
+    df_window$DOY[-1][which.max(abs(rate))]
   }) %>%
     setNames(paste0("DOY_maxROC_", soil_indices)) %>%
     as_tibble()
   
-  # ---- weather cumulative + soil averages ----
+  # ---- Window cumulatives ----
   df_summary <- df_window %>%
     dplyr::summarise(
-      cum_tmean     = sum(tmean, na.rm = TRUE),
-      cum_gdd       = sum(gdd, na.rm = TRUE),
-      cum_meansrad  = sum(srad, na.rm = TRUE),
-      cumGDVI       = sum(GDVI, na.rm = TRUE),
-      cumRNDVI      = sum(Lai, na.rm = TRUE),
-      cum_vpd       = sum(vpd, na.rm = TRUE),
-      cumkNDVI       = sum(kNDVI, na.rm = TRUE),
-      cum_tmin      = sum(tmin, na.rm = TRUE),
-      cum_tmax      = sum(tmax, na.rm = TRUE),
-      cum_RH        = sum(avgRH, na.rm = TRUE),
-      cum_soiltemp  = sum(SoilTMP0_10cm_inst, na.rm = TRUE),
-      avgsoilorg    = mean(SOC_avg_0_30cm, na.rm = TRUE),
-      avgsoilclay   = mean(Clay_avg_0_30cm, na.rm = TRUE)
-
-      
+      cum_tmean    = sum(tmean,              na.rm=TRUE),
+      cum_gdd      = sum(gdd,                na.rm=TRUE),
+      cum_meansrad = sum(srad,               na.rm=TRUE),
+      cumGDVI      = sum(GDVI,               na.rm=TRUE),
+      cumRNDVI     = sum(Lai,                na.rm=TRUE),
+      cumkNDVI     = sum(kNDVI,              na.rm=TRUE),
+      cum_vpd      = sum(vpd,                na.rm=TRUE),
+      cum_tmin     = sum(tmin,               na.rm=TRUE),
+      cum_tmax     = sum(tmax,               na.rm=TRUE),
+      cum_RH       = sum(avgRH,              na.rm=TRUE),
+      cum_soiltemp = sum(SoilTMP0_10cm_inst, na.rm=TRUE),
+      avgsoilorg   = mean(SOC_avg_0_30cm,    na.rm=TRUE),
+      avgsoilclay  = mean(Clay_avg_0_30cm,   na.rm=TRUE)
     ) %>%
     dplyr::mutate(
-      Field_ID = field_id,
+      Field_ID    = field_id,
       DOY_max_fit = doy_max
     ) %>%
     dplyr::select(Field_ID, DOY_max_fit, everything()) %>%
-    bind_cols(soil_means, soil_doys) %>%  # attach soil stats
+    bind_cols(year_features, soil_means, soil_doys) %>%  # ← year_features added
     as_tibble()
   
   return(df_summary)
 })
 
-# Check which data frames are empty
-empty_check <- sapply(meteo_summary_listharvest, function(df) nrow(df) == 0)
+meteo_summary_listharvest <- Filter(Negate(is.null),
+                                    meteo_summary_listharvest)
 
-# Print results
-if (any(empty_check)) {
+# ---- Verify ----
+cat("Harvest fields:", length(meteo_summary_listharvest), "\n")
+cat("yearcumgdd present:",
+    "yearcumgdd" %in% names(meteo_summary_listharvest[[1]]), "\n")
+cat("yearcumvpd present:",
+    "yearcumvpd" %in% names(meteo_summary_listharvest[[1]]), "\n")
+cat(sprintf("yearcumgdd range: %.0f – %.0f\n",
+            min(sapply(meteo_summary_listharvest,
+                       function(x) x$yearcumgdd), na.rm=TRUE),
+            max(sapply(meteo_summary_listharvest,
+                       function(x) x$yearcumgdd), na.rm=TRUE)))
+empty_check <- sapply(meteo_summary_listharvest, function(df) nrow(df) == 0)# Check which data frames are empty
+
+if (any(empty_check)) {# Print results
   cat("⚠️ These data frames are empty:\n")
   print(names(meteo_summary_listharvest)[empty_check])
 } else {
@@ -447,14 +606,11 @@ if (any(empty_check)) {
 
 # Optional: separate non-empty data frames
 non_empty_dfs <- meteo_summary_listharvest[!empty_check]
-
-
 meteo_summary_df <- bind_rows(meteo_summary_list)
 meteo_summary_df <- meteo_summary_df %>%
   mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
   rename(Field_Year = Field_ID)
 mean(meteo_summary_df$cum_meansrad)
-
 meteo_summary_df_harvest <- bind_rows(meteo_summary_listharvest)
 meteo_summary_df_harvest <- meteo_summary_df_harvest %>%
   mutate(Field_ID = gsub("_VI", "", Field_ID)) %>%
@@ -499,6 +655,7 @@ dfharvest <- dfharvest %>%
     -HDDOY.y
   )    
 dfharvest
+
 #---------------------------------------------------------
 #Problematic data
 #---------------------------------------------------------
@@ -531,8 +688,6 @@ dfharvest$lagtrsgreenup <- dfharvest$SOS_trs.sos - dfharvest$Greenup.Greenup
 
 names(df)[grepl("cum", names(df))]
 names(dfharvest)[grepl("cum", names(dfharvest))]
-
-
 cum_cols <- names(df)[grepl("cum", names(df))]
 # Rename to indicate planting-period
 df_plant <- df[, cum_cols]
@@ -540,8 +695,17 @@ names(df_plant) <- paste0(names(df_plant), "_PD")
 dfharvest <- cbind(dfharvest, df_plant)
 names(dfharvest)[grepl("cum", names(dfharvest))]
 df_harvest$cum_meansrad_PD
+
+df <- df %>%
+  mutate(Year = sub(".*_(\\d{4})$", "\\1", Field_Year))
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 #RANDOM FOREST
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 library(randomForest)
 library(Metrics)
@@ -874,6 +1038,7 @@ cat("Time taken:", end_time - start_time, "\n")
 phenology_df <- bind_rows(phenology_list)
 
 
+
 #------------------------------------------------------------------------------
 #----------OLD 
 #---------------------------------
@@ -1059,6 +1224,7 @@ vi_list_gt20$Baker_20_2023$kNDVI
 vi_list_gt20$Baker_50_2024$kNDVI
 
 
+
 ##----------------------------------------------------
 #harvest
 ##----------------------------------------------------
@@ -1174,3 +1340,21 @@ ggplot(df_planting, aes(x = DOY_min_fit, y = PDDOY, color = meansrad_M5)) +
 
 
 df_planting$meansrad_M5
+
+dup_summary <- lapply(names(merged_list), function(nm) {
+  
+  df <- merged_list[[nm]]
+  
+  dup_cols <- unique(names(df)[duplicated(names(df))])
+  
+  if(length(dup_cols) > 0) {
+    data.frame(
+      Field_Year = nm,
+      Duplicated_Columns = paste(dup_cols, collapse = ", ")
+    )
+  }
+})
+
+dup_summary <- do.call(rbind, dup_summary)
+
+print(dup_summary)

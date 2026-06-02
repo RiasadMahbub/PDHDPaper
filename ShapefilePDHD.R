@@ -928,7 +928,48 @@ nrow(PDHD2015)+nrow(PDHD2016)+nrow(PDHD2017)+
   nrow(PDHD2021) + nrow(PDHD2022) + nrow(PDHD2023) + 
   nrow(PDHD2024)
 
+#used to find source in the df
+merged_shapefile
+fieldnamesmergedshpdf <- st_drop_geometry(merged_shapefile)
+fieldnamesmergedshpdf <- fieldnamesmergedshpdf %>%
+  mutate(
+    YEAR = as.character(YEAR),
+    Field_ID = paste(FIELD_NAME, YEAR, sep = "_")
+  )
+fieldnamesmergedshpdf
+View(fieldnamesmergedshpdf)
+# Assuming your shapefile is 'merged_shapefile'
+# Compute centroids of polygons
+centroids <- st_centroid(merged_shapefile)
 
+# Extract coordinates as columns
+fieldnamesmergedshpdf <- merged_shapefile %>%
+  mutate(
+    YEAR = as.character(YEAR),
+    Field_ID = paste(FIELD_NAME, YEAR, sep = "_"),
+    centroid = st_centroid(geometry)
+  ) %>%
+  mutate(
+    lon = st_coordinates(centroid)[,1],
+    lat = st_coordinates(centroid)[,2]
+  ) %>%
+  st_drop_geometry() %>%
+  select(FIELD_NAME, Variety, YEAR, PDDOY, HDDOY, source, Field_ID, lat, lon)
+
+# View the first rows
+head(fieldnamesmergedshpdf)
+# 1. Get unique sources with a representative lat/lon (mean centroid)
+unique_sources <- fieldnamesmergedshpdf %>%
+  group_by(source) %>%
+  summarise(
+    lat = mean(lat, na.rm = TRUE),
+    lon = mean(lon, na.rm = TRUE),
+    n_fields = n()  # optional: number of fields per source
+  ) %>%
+  ungroup()
+
+# View the results
+unique_sources
 
 # ----------------------------
 # 9. JAVASCRIPT EXPORT
@@ -2066,3 +2107,204 @@ print("2024 geometry types:")
 print(table(st_geometry_type(shp2024)))
 
 
+#=========================================================
+##county of each data
+#=========================================================
+library(sf)
+merged_shapefile
+shp_path<-"C:/Users/rbmahbub/Documents/Data/GeospatialData/ArkansasShapefile/CountyShapefileFromArkansasOffice/COUNTY_BOUNDARY.shp"
+if(file.exists(shp_path)){
+  #=======================================================
+  #STREAMING_CHUNK:Readingtheshapefile...
+  #=======================================================
+  ar_counties<-st_read(shp_path)
+  #=======================================================
+  #STREAMING_CHUNK:Basicinspectionofthedata...
+  #=======================================================
+  
+  print(head(ar_counties))
+  
+  #Optionaladditionalinspection
+  
+  cat("\n---STRUCTUREOFSHAPEFILE---\n")
+  print(st_geometry_type(ar_counties))
+  
+  cat("\n---COORDINATEREFERENCESYSTEM(CRS)---\n")
+  print(st_crs(ar_counties))
+  
+  #=======================================================
+  #STREAMING_CHUNK:Plottingforvisualconfirmation...
+  #=======================================================
+  
+  plot(
+    st_geometry(ar_counties),
+    main="ArkansasCountyBoundaries",
+    border="blue"
+  )
+  
+}else{
+  
+  stop(
+    "Thefilewasnotfoundatthespecifiedpath.\n",
+    "Pleaseverifythefoldercontentsandshapefilename."
+  )
+  
+}
+
+
+#=========================================================
+#ADDCOUNTYNAMETOMERGED_SHAPEFILE
+#=========================================================
+library(sf)
+library(dplyr)
+#========================================================
+#CHECKCRS
+#=========================================================
+st_crs(merged_shapefile)
+st_crs(ar_counties)
+#=========================================================
+#TRANSFORMCOUNTYSHAPEFILETOMATCHMERGED_SHAPEFILECRS
+#=========================================================
+
+ar_counties_wgs84 <- st_transform(
+  ar_counties,
+  st_crs(merged_shapefile)
+)
+
+#=========================================================
+#SPATIALJOIN:
+#ADDCOUNTYNAMETOEACHFIELD
+#=========================================================
+
+merged_shapefile_with_county <- st_join(
+  merged_shapefile,
+  ar_counties_wgs84 %>%
+    select(COUNTY),
+  join = st_intersects,
+  left = TRUE
+)
+
+#=========================================================
+#RENAMECOLUMN(IFDESIRED)
+#=========================================================
+
+merged_shapefile_with_county <- merged_shapefile_with_county %>%
+  rename(County = COUNTY)
+
+#=========================================================
+#CHECKRESULTS
+#=========================================================
+merged_shapefile_with_county
+#=========================================================
+#OPTIONAL:SAVEUPDATEDSHAPEFILE
+#=========================================================
+
+out_path <- "C:/Users/rbmahbub/Documents/Data/GeospatialData/MergedShapefileWithCounty.shp"
+
+st_write(
+  merged_shapefile_with_county,
+  out_path,
+  delete_layer = TRUE
+)
+
+cat("\n✓Countycolumnaddedtomerged_shapefile\n")
+cat(sprintf("✓Savedto:%s\n", out_path))
+merged_shapefile_with_county
+
+
+combined_data
+merged_shapefile_with_county
+#=========================================================
+#ADDLAT,LON,ANDCOUNTYTOCOMBINED_DATA
+#USINGmerged_shapefile_with_county
+#=========================================================
+
+library(sf)
+library(dplyr)
+
+#=========================================================
+#CALCULATECENTROIDSOFFIELDS
+#=========================================================
+
+field_centroids <- st_centroid(merged_shapefile_with_county)
+
+#=========================================================
+#EXTRACTLAT/LONFROMCENTROIDS
+#=========================================================
+
+coords <- st_coordinates(field_centroids)
+
+field_info <- field_centroids %>%
+  mutate(
+    Lon = coords[,1],
+    Lat = coords[,2]
+  ) %>%
+  st_drop_geometry() %>%
+  select(
+    FIELD_NAME,
+    YEAR,
+    County,
+    Lon,
+    Lat
+  )
+
+#=========================================================
+#JOINWITHcombined_data
+#=========================================================
+
+combined_data_clean <- combined_data_with_location %>%
+rename(YEAR = YEAR.x) %>%
+dplyr::select(
+  -YEAR.y,
+  -PD,
+  -HD,
+  -Variety
+) %>%
+
+filter(!is.na(County))
+
+#=========================================================
+#OPTIONAL:SAVETOCSV
+#=========================================================
+combined_data_with_location
+out_csv <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Data/combined_data_with_location.csv"
+
+write.csv(
+  combined_data_clean,
+  out_csv,
+  row.names = FALSE
+)
+
+cat("\n✓Lat,Lon,andCountyaddedtocombined_data\n")
+cat(sprintf("✓Savedto:%s\n", out_csv))
+
+
+
+#=========================================================
+#GET UNIQUE FIELD NAMES
+#=========================================================
+
+fields_map <- unique(field_info$FIELD_NAME)
+fields_combined <- unique(combined_data$FIELD_NAME)
+
+#=========================================================
+#NAMES IN field_info BUT NOT IN combined_data
+#=========================================================
+
+only_in_field_info <- setdiff(fields_map, fields_combined)
+
+#=========================================================
+#NAMES IN combined_data BUT NOT IN field_info
+#=========================================================
+
+only_in_combined <- setdiff(fields_combined, fields_map)
+
+#=========================================================
+#PRINT RESULTS
+#=========================================================
+
+cat("\n---IN field_info BUT NOT IN combined_data---\n")
+print(only_in_field_info)
+
+cat("\n---IN combined_data BUT NOT IN field_info---\n")
+print(only_in_combined)

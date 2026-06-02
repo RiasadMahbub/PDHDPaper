@@ -420,3 +420,28 @@ cat("\n--- RFE Results Summary (Limited to 10 Features) ---\n")
 cat("Optimal Number of Features:", optimal_num_features, "\n")
 cat("Optimal Features Selected:\n", paste(optimal_features, collapse = ", "), "\n")
 
+
+#--------------------------------------------------------------------
+#Variable inflation factor
+#--------------------------------------------------------------------
+# Total number of points
+df_planting_pheno <- df %>%
+  dplyr::select(
+    cum_tmin, cum_soiltemp, SOS_trs.sos, cum_gdd, SOS_deriv.sos, cum_RH, cum_vpd, avgsoilorg,
+    PDDOY
+  ) %>% # drop Field_ID for modeling
+  dplyr::filter(!is.na(PDDOY))%>%
+  drop_na() # This removes rows with NA in any column
+
+# Load car package for VIF
+library(car)
+
+# Fit a linear model with all predictors for PDDOY
+vif_model <- lm(PDDOY ~ cum_tmin + cum_soiltemp + SOS_trs.sos + cum_gdd + 
+                  SOS_deriv.sos + cum_RH + cum_vpd + avgsoilorg, 
+                data = df_planting_pheno)
+
+# Calculate VIF
+vif_values <- vif(vif_model)
+# View VIF values
+print(vif_values)

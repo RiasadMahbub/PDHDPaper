@@ -19,7 +19,7 @@ library(RColorBrewer)
 library(patchwork)
 library(vangogh)
 library(phenofit)
-utils::browseURL(getwd())
+#utils::browseURL(getwd())
 #==================================================================================
 #==================================================================================
 # Generated from 'OrganizeGroundData.R' - Planting day-of-year (PDDOY) distribution
@@ -36,11 +36,11 @@ p_hd <- ggplot(combined_data, aes(x = HDDOY)) +
     x = "Day of Year",
     y = "Number of Harvests"
   ) +
-  theme_minimal(base_size = 14) +
+  theme_minimal(base_size = 16) +
   scale_x_continuous(breaks = seq(0, 366, by = 30)) +
   annotate("text", x = 210, y = 75, 
            label = paste0("N = ", sum(!is.na(combined_data$HDDOY))), 
-           size = 5, color = zissou_color4)
+           size = 6, color = zissou_color4)
 ggsave(
   filename = "harvest_date.png",
   plot = p_hd,
@@ -83,7 +83,7 @@ pdhdviolin <- ggplot(pd_hd_long, aes(x = Type, y = DOY, fill = Type)) +
                        point_colour = NA, slab_colour = NA) +
   geom_boxplot(width = 0.2, outlier.shape = NA, position = position_nudge(x = 0.15)) +
   scale_fill_manual(values = color_map) +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 18) +
   labs(
     x = NULL,
     y = "Day of Year (day)"
@@ -97,15 +97,15 @@ pdhdviolin <- ggplot(pd_hd_long, aes(x = Type, y = DOY, fill = Type)) +
         "Mode: ", round(Mode), "\n",
         "N = ", N
       ),
-      hjust = ifelse(Type == "HDDOY", 1, 0.5)
+      hjust = ifelse(Type == "HDDOY", 1, 0.8)
     ),
     color = "black",
-    size = 4,
+    size = 6,
     vjust = 1
   ) +
   theme(
     axis.title = element_text(color = "black"), 
-    axis.text  = element_text(color = "black", size = 14),
+    axis.text  = element_text(color = "black", size = 18),
     # Add major and minor grid lines
     panel.grid.major = element_line(colour = "grey90"),
     panel.grid.minor = element_line(colour = "grey95"),
@@ -149,9 +149,9 @@ stats <- df %>%
 # Plot PDMaxdays
 p1 <- ggplot(df, aes(x = PDMaxdays)) +
   geom_histogram(fill = color_map["PDMaxdays"], color = "white", bins = 30) +
-  labs(  x = expression("Time to peak (" * italic(k) * "NDVI"[max] * ") to PD (day)"),
+  labs(  x = expression("DOY of   (" * italic(k) * "NDVI"[max] * ") to PD (day)"),
         y = "Count") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 18) +
   annotate(
     "text",
     x = 120,       # explicit x-coordinate
@@ -159,11 +159,11 @@ p1 <- ggplot(df, aes(x = PDMaxdays)) +
     label = paste0("Mean = ", round(stats$mean_PD,1), "\nSD = ", round(stats$sd_PD,1)),
     hjust = 0,
     vjust = 0,
-    size = 4
+    size = 6
   ) +
   theme(
     axis.title = element_text(color = "black"), 
-    axis.text  = element_text(color = "black", size = 14),
+    axis.text  = element_text(color = "black", size = 16),
     # Add major and minor grid lines
     panel.grid.major = element_line(colour = "grey90"),
     panel.grid.minor = element_line(colour = "grey95")
@@ -172,21 +172,21 @@ p1 <- ggplot(df, aes(x = PDMaxdays)) +
 # Plot HDMaxdays
 p2 <- ggplot(df, aes(x = HDMaxdays)) +
   geom_histogram(fill = color_map["HDMaxdays"], color = "white", bins = 30) +
-  labs(  x = expression("Time to peak (" * italic(k) * "NDVI"[max] * ") to HD (day)"),
+  labs(  x = expression("DOY of  (" * italic(k) * "NDVI"[max] * ") to HD (day)"),
         y = "Count") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 18) +
   annotate(
     "text",
-    x = 60,        # explicit x-coordinate
-    y = 60,        # explicit y-coordinate
+    x = 70,        # explicit x-coordinate
+    y = 45,        # explicit y-coordinate
     label = paste0("Mean = ", round(stats$mean_HD,1), "\nSD = ", round(stats$sd_HD,1)),
     hjust = 0,
     vjust = 0,
-    size = 4
+    size = 6
   ) +
   theme(
     axis.title = element_text(color = "black"), 
-    axis.text  = element_text(color = "black", size = 14),
+    axis.text  = element_text(color = "black", size = 16),
     # Add major and minor grid lines
     panel.grid.major = element_line(colour = "grey90"),
     panel.grid.minor = element_line(colour = "grey95")
@@ -232,34 +232,102 @@ legend_labels <- c(
   expression(italic("Duration_PD_UD"))
 )
 # plot
+# plot
 lagall <- ggplot(df_long, aes(x = LagValue, y = gsl, color = LagType)) +
   geom_point(alpha = 0.7, size = 3) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
-  stat_cor(aes(label = after_stat(r.label)), method = "pearson",
-           label.x.npc = "left", label.y.npc = "top", size = 5, show.legend = FALSE) +
-  theme_classic(base_size = 12) +
+  
+  stat_cor(
+    aes(label = after_stat(paste0("italic(r) == ", sprintf("%.2f", r)))),
+    method = "pearson",
+    parse = TRUE,
+    label.x.npc = "left",
+    label.y.npc = "top",
+    size = 6,
+    show.legend = FALSE
+  ) +
+  theme_classic(base_size = 16) +
   scale_color_manual(
     values = pal,
-    # APPLY THE EXPRESSION LABELS HERE for correct rendering
     labels = legend_labels
   ) +
-  scale_x_continuous(breaks = seq(-40, max(df_long$LagValue, na.rm = TRUE), by = 20)) +
-  scale_y_continuous(breaks = seq(0, max(df_long$gsl, na.rm = TRUE), by = 25)) +
+  
+  scale_x_continuous(
+    breaks = seq(-40, max(df_long$LagValue, na.rm = TRUE), by = 20)
+  ) +
+  
+  scale_y_continuous(
+    breaks = seq(0, max(df_long$gsl, na.rm = TRUE), by = 25)
+  ) +
+  
   labs(
     x = "Lag (day)",
     y = "Growing season length (HD–PD)",
     color = NULL
   ) +
+  
   theme(
     axis.title = element_text(color = "black"),
-    axis.text = element_text(color = "black", size = 14),
+    axis.text = element_text(color = "black", size = 16),
     legend.position = c(0.45, 0.87),
     legend.direction = "vertical",
-    legend.background = element_rect(fill = alpha('white', 0.5)),
+    legend.background = element_rect(fill = alpha("white", 0.5)),
     legend.key.size = unit(0.8, "lines"),
-    legend.text = element_text(size = 12)
+    legend.text = element_text(size = 16)
   )
+
 lagall
+
+# 1. Map the EXACT column values to your desired Plotmath expressions
+custom_titles <- c(
+  "lagsosderpddoy" = "italic(Duration_PD_SOS)[DER]",
+  "lagsostrspddoy" = "italic(Duration_PD_SOS)[TRS]",
+  "lagudpddoy"     = "italic(Duration_PD_UD)"
+)
+
+# 2. Re-run the plot logic
+lagall <- ggplot(df_long, aes(x = LagValue, y = gsl, color = LagType)) +
+  geom_point(alpha = 0.7, size = 3) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  
+  # stat_cor fix (parse outside aes)
+  stat_cor(
+    aes(label = after_stat(paste0("italic(r) == ", sprintf("%.2f", r)))),
+    method = "pearson",
+    parse = TRUE, 
+    label.x.npc = "left",
+    label.y.npc = "top",
+    size = 6,
+    show.legend = FALSE
+  ) +
+  
+  # Use the as_labeller with the corrected keys
+  facet_wrap(
+    ~LagType,
+    nrow = 1,
+    ncol = 3,
+    labeller = as_labeller(custom_titles, default = label_parsed)
+  ) +
+  
+  theme_classic(base_size = 16) +
+  scale_color_manual(values = pal) + 
+  
+  labs(
+    x = "Lag (day)",
+    y = "Growing season length (HD–PD)",
+    color = NULL
+  ) +
+  
+  theme(
+    axis.title = element_text(color = "black"),
+    axis.text = element_text(color = "black", size = 16),
+    strip.background = element_blank(),
+    strip.text = element_text(size = 16, face = "bold"),
+    legend.position = "none"
+  )
+
+lagall
+
 # Save the plot to the specified file path
 ggsave(
   filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/laggsl.jpeg",
@@ -274,19 +342,27 @@ ggsave(
 #COMBINE VIOLING DOYMAX AND LAG GRAPH INTO ONE
 #--------------------------------------------------------------------
 # Combine plots in 2 rows x 2 columns
+
+# 1. Define the layout
+# We use the '/' and '+' operators, but we ensure lagall is 
+# treated as three separate areas if possible, or we adjust the tagging.
+
 combined_all <- (
-  (pdhdviolin | lagall) /        # first row: two plots side by side
-    (p1 + p2)                      # second row: two plots combined
-) +
-  plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(size = 16, face = "bold"))
+  pdhdviolin /             # Becomes A
+    lagall /                 # Becomes B, C, D (if facets are tagged)
+    (p1 + p2)                # Becomes E and F
+) + 
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 20, face = "bold"))
 combined_all
+# NOTE: If patchwork still gives lagall only one tag (B), 
+# use the 'collect' or manual tagging approach below:
 # Save the combined figure
 ggsave(
   filename = "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/combined_violin_lag_hist.png",
   plot = combined_all,
-  width = 12,
-  height = 10,
+  width = 14,
+  height = 14,
   dpi = 300
 )
 #---------------------------------------------------------------------------------------
@@ -363,7 +439,22 @@ get_metrics_label <- function(y, y_hat) {
   paste0("R² = ", r2, 
          "\nRMSD = ", rmse_val, " days",
          "\nMAD = ", mae_val, " days",
-         "\nBias = ", bias_val, " days")
+         "\nMBD = ", bias_val, " days")
+}
+get_metrics_label <- function(y, y_hat) {
+  valid <- complete.cases(y, y_hat)  # keep only rows where both are non-NA
+  y <- y[valid]
+  y_hat <- y_hat[valid]
+  
+  r2 <- round(cor(y, y_hat)^2, 2)
+  rmse_val <- round(rmse(y, y_hat), 2)
+  mae_val <- round(mae(y, y_hat), 2)
+  bias_val <- round(mean(y_hat - y), 2)
+  
+  paste0("R² = ", r2, 
+         "\nRMSD = ", rmse_val, " days",
+         "\nMAD = ", mae_val, " days",
+         "\nMBD = ", bias_val, " days")
 }
 # Define a common theme
 custom_theme <- theme_minimal(base_size = 14) +
@@ -537,68 +628,57 @@ PDmetrics_label4_clean <- gsub("\n", ", ", metrics_label4)
 metrics_label1 <- get_metrics_label(phenology_df$HDDOY, phenology_df$EOS_trs.eos)
 n1 <- sum(!is.na(phenology_df$HDDOY) & !is.na(phenology_df$EOS_trs.eos))
 label1 <- paste0(metrics_label1, "\nn = ", n1)
+# Top and bottom positions for annotations
+top_y <- Inf
+metrics_y <- 190   # adjust to be slightly below the data points
+label_size <- 4.5
+
+# Plot 1 - A
 p1 <- ggplot(phenology_df, aes(x = HDDOY, y = EOS_trs.eos)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0, color = "orange", linetype = "dashed", linewidth = 1) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs( x = NULL, y = "End of Season (DOY)") +
+  labs(x = NULL, y = "End of Season (DOY)") +
   scale_x_continuous(breaks = seq(0, 400, 10)) +
-  scale_y_continuous(limits = c(200, NA), breaks = seq(200, 300, 10)) + # Y-axis now starts at 200
-  annotate("text", x = 235, y = Inf, # Use y=Inf to pin the label to the top
-           label = "A", hjust = 0, vjust = 1.2, size = 5, fontface = "bold") +
-  annotate("text", x = 300, y = -Inf, # Moved metrics to bottom right
-           label = label1, hjust = 0, vjust = -0.5) +
+  coord_cartesian(ylim = c(190, 310)) +
+  annotate("text", x = 235, y = top_y, label = "A", hjust = 0, vjust = 1.2, size = label_size, fontface = "bold") +
+  annotate("text", x = 300, y = metrics_y, label = label1, hjust = 0, vjust = 0, size = label_size) +
   custom_theme
 
 # Plot 2 - B
-metrics_label2 <- get_metrics_label(phenology_df$HDDOY, phenology_df$EOS_deriv.eos)
-n2 <- sum(!is.na(phenology_df$HDDOY) & !is.na(phenology_df$EOS_deriv.eos))
-label2 <- paste0(metrics_label2, "\nn = ", n2)
 p2 <- ggplot(phenology_df, aes(x = HDDOY, y = EOS_deriv.eos)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0, color = "orange", linetype = "dashed", linewidth = 1) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs( x = NULL, y = "End of Season (DOY)") +
+  labs(x = NULL, y = "End of Season (DOY)") +
   scale_x_continuous(breaks = seq(0, 400, 10)) +
-  scale_y_continuous(limits = c(200, NA), breaks = seq(200, 300, 10)) + # Y-axis now starts at 200
-  annotate("text", x = 235, y = Inf, # Use y=Inf to pin the label to the top
-           label = "B", hjust = 0, vjust = 1.2, size = 5, fontface = "bold") +
-  annotate("text", x = 300, y = -Inf, # Moved metrics to bottom right
-           label = label2, hjust = 0, vjust = -0.5) +
+  coord_cartesian(ylim = c(190, 310)) +
+  annotate("text", x = 235, y = top_y, label = "B", hjust = 0, vjust = 1.2, size = label_size, fontface = "bold") +
+  annotate("text", x = 300, y = metrics_y, label = label2, hjust = 0, vjust = 0, size = label_size) +
   custom_theme
 
 # Plot 3 - C
-metrics_label3 <- get_metrics_label(phenology_df$HDDOY, phenology_df$DD.DD)
-n3 <- sum(!is.na(phenology_df$HDDOY) & !is.na(phenology_df$DD.DD))
-label3 <- paste0(metrics_label3, "\nn = ", n3)
 p3 <- ggplot(phenology_df, aes(x = HDDOY, y = DD.DD)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0, color = "orange", linetype = "dashed", linewidth = 1) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs( x = "Harvest Date (DOY)", y = "Final Adjusted Downturn Date (DOY)") +
+  labs(x = "Harvest Date (DOY)", y = "Final Adjusted Downturn Date (DOY)") +
   scale_x_continuous(breaks = seq(0, 400, 10)) +
-  scale_y_continuous(limits = c(180, 300), breaks = seq(180, 300, 10)) + # Y-axis now starts at 180
-  annotate("text", x = 300, y = 205, # Moved metrics down to y=205
-           label = label3, hjust = 0, vjust = 0.5) +
-  annotate("text", x = 235, y = Inf, # Use y=Inf to pin the label to the top
-           label = "C", hjust = 0, vjust = 1.2, size = 5, fontface = "bold") +
+  coord_cartesian(ylim = c(190, 310)) +
+  annotate("text", x = 235, y = top_y, label = "C", hjust = 0, vjust = 1.2, size = label_size, fontface = "bold") +
+  annotate("text", x = 300, y = metrics_y, label = label3, hjust = 0, vjust = 0, size = label_size) +
   custom_theme
 
-# Plot 4 - D (metrics at bottom right)
-metrics_label4 <- get_metrics_label(phenology_df$HDDOY, phenology_df$Senescence.Senescence)
-n4 <- sum(!is.na(phenology_df$HDDOY) & !is.na(phenology_df$Senescence.Senescence))
-label4 <- paste0(metrics_label4, "\nn = ", n4)
-p4 <- ggplot(phenology_df, aes(x = HDDOY, y = Senescence.Senescence)) +
+# Plot 4 - D
+p4 <- ggplot(phenology_df, aes(x = HDDOY, y = Dormancy.Dormancy)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0, color = "orange", linetype = "dashed", linewidth = 1) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
   labs(x = "Harvest Date (DOY)", y = "Dormancy (DOY)") +
   scale_x_continuous(breaks = seq(0, 400, 10)) +
-  scale_y_continuous(limits = c(180, 300), breaks = seq(180, 300, 10)) + # Y-axis now starts at 180
-  annotate("text", x = 235, y = Inf, # Use y=Inf to pin the label to the top
-           label = "D", hjust = 0, vjust = 1.2, size = 5, fontface = "bold") +
-  annotate("text", x = 305, y = 205, # Moved metrics down to y=205
-           label = label4, hjust = 0, vjust = 0.5) +
+  coord_cartesian(ylim = c(190, 310)) +
+  annotate("text", x = 225, y = top_y, label = "D", hjust = 0, vjust = 1.2, size = label_size, fontface = "bold") +
+  annotate("text", x = 290, y = metrics_y, label = label4, hjust = 0, vjust = 0, size = label_size) +
   custom_theme
 
 # Arrange all plots
@@ -616,6 +696,127 @@ HDmetrics_label1_clean <- gsub("\n", ", ", metrics_label1)
 HDmetrics_label2_clean <- gsub("\n", ", ", metrics_label2)
 HDmetrics_label3_clean <- gsub("\n", ", ", metrics_label3)
 HDmetrics_label4_clean <- gsub("\n", ", ", metrics_label4)
+
+
+#========================================================
+# METRIC FUNCTION (paired observations)
+#========================================================
+
+get_metrics <- function(management, phenology) {
+  valid <- complete.cases(management, phenology)
+  m <- management[valid]
+  p <- phenology[valid]
+  d <- p - m
+  c(
+    RMSD = round(sqrt(mean(d^2)), 2),
+    MAD  = round(mean(abs(d)), 2),
+    MBD  = round(mean(d), 2),
+    r    = round(cor(m, p), 2)
+  )
+}
+
+#========================================================
+# VARIABLES
+#========================================================
+
+methods <- list(
+  Threshold  = df$SOS_trs.sos,
+  Derivative = df$SOS_deriv.sos,
+  Infection   = df$Greenup.Greenup,
+  GU  = df$UD.UD
+)
+
+#========================================================
+# PAIRWISE METRICS
+#========================================================
+
+results <- t(sapply(methods, function(x) {
+  get_metrics(df$PDDOY, x)
+}))
+
+metrics_tablepd <- data.frame(
+  Method = rownames(results),
+  RMSD = results[, "RMSD"],
+  MAD  = results[, "MAD"],
+  MBD  = results[, "MBD"],
+  R    = results[, "r"],
+  n = 662
+)
+
+metrics_tablepd
+
+#========================================================
+# METRIC FUNCTION
+#========================================================
+
+get_metrics <- function(management, phenology) {
+  
+  valid <- complete.cases(management, phenology)
+  
+  m <- management[valid]
+  p <- phenology[valid]
+  
+  d <- p - m
+  
+  c(
+    RMSD = round(sqrt(mean(d^2)), 2),
+    MAD  = round(mean(abs(d)), 2),
+    MBD  = round(mean(d), 2),
+    R    = round(cor(m, p), 2),
+    n    = length(d)
+  )
+}
+
+#========================================================
+# HARVEST METHODS
+#========================================================
+
+hd_methods <- list(
+  Threshold  = df$EOS_trs.eos,
+  Derivative = df$EOS_deriv.eos,
+  Inflection= df$Dormancy.Dormancy,
+  Gu         = df$DD.DD
+  
+)
+
+#========================================================
+# CALCULATE METRICS
+#========================================================
+
+hd_results <- t(sapply(hd_methods, function(x) {
+  get_metrics(df$HDDOY, x)
+}))
+
+#========================================================
+# CREATE FINAL TABLE
+#========================================================
+
+hd_metrics_table <- data.frame(
+  Method = rownames(hd_results),
+  RMSD = hd_results[, "RMSD"],
+  MAD  = hd_results[, "MAD"],
+  MBD  = hd_results[, "MBD"],
+  R    = hd_results[, "R"],
+  n    = hd_results[, "n"]
+)
+
+hd_metrics_table
+
+#========================================================
+# SAVE TABLES AS CSV
+#========================================================
+
+write.csv(
+  hd_metrics_table,
+  "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/hd_metrics_table.csv",
+  row.names = FALSE
+)
+
+write.csv(
+  metrics_table,
+  "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/metrics_tablepd.csv",
+  row.names = FALSE
+)
 
 # ---------------------------
 # ---------------------------
@@ -674,48 +875,51 @@ grid.arrange(
 dev.off()
 
 # ---------------------------------------------------------------------------------
-# RANDOM FOREST PREDICTION
+# RANDOM FOREST PREDICTION - Updated for MBD
 # ---------------------------------------------------------------------------------
-# === Plot 1: RMSE and MAE for Planting ===
-# Extract colors from the "StarryNight" palette (you can adjust how many)
-# Ensure consistent order for legend and bars
-plot1_df_planting_pheno$Dataset <- factor(plot1_df_planting_pheno$Dataset,
-                                          levels = c("Train", "Validation", "Test"))
-plot2_df_planting_pheno$Dataset <- factor(plot2_df_planting_pheno$Dataset,
-                                          levels = c("Train", "Validation", "Test"))
-
-plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset,
-                                           levels = c("Train", "Validation", "Test"))
-plot2_df_planting_deines$Dataset <- factor(plot2_df_planting_deines$Dataset,
-                                           levels = c("Train", "Validation", "Test"))
-vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
-# Select colors 1, 3, and 5
-vg_colors <- vvg_colors[c(1, 3, 5)]
-
-# --- Ensure Dataset factor levels
 library(ggplot2)
 library(dplyr)
 library(cowplot)
 library(vangogh)
 
-# --- Ensure Dataset factor levels
-plot1_df$Dataset <- factor(plot1_df$Dataset, levels = c("Train", "Validation", "Test"))
-plot2_df$Dataset <- factor(plot2_df$Dataset, levels = c("Train", "Validation", "Test"))
+# --- 1. DATA PREPARATION & CONSISTENCY ---
+# This ensures that the code finds the correct rows even if the original data says "Bias"
+rename_bias_to_mbd <- function(df) {
+  if("Metric" %in% names(df)) {
+    df$Metric <- gsub("Bias", "MBD", df$Metric)
+  }
+  return(df)
+}
 
-# --- Separate R² and Bias
-plot2_r2_df <- filter(plot2_df, Metric == "R²")
-plot2_bias_df <- filter(plot2_df, Metric == "Bias")
-plot1_rmse_mae_df <- plot1_df  # Already RMSE & MAE
+# Apply renaming and factor leveling to all dataframes
+plot1_df <- rename_bias_to_mbd(plot1_df)
+plot2_df <- rename_bias_to_mbd(plot2_df)
+plot1_df_planting_pheno  <- rename_bias_to_mbd(plot1_df_planting_pheno)
+plot2_df_planting_pheno  <- rename_bias_to_mbd(plot2_df_planting_pheno)
+plot1_df_planting_deines <- rename_bias_to_mbd(plot1_df_planting_deines)
+plot2_df_planting_deines <- rename_bias_to_mbd(plot2_df_planting_deines)
 
-# --- Colors
+dataset_levels <- c("Train", "Validation", "Test")
+
+# Apply factors
+plot1_df$Dataset <- factor(plot1_df$Dataset, levels = dataset_levels)
+plot2_df$Dataset <- factor(plot2_df$Dataset, levels = dataset_levels)
+plot1_df_planting_pheno$Dataset <- factor(plot1_df_planting_pheno$Dataset, levels = dataset_levels)
+plot2_df_planting_pheno$Dataset <- factor(plot2_df_planting_pheno$Dataset, levels = dataset_levels)
+plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset, levels = dataset_levels)
+plot2_df_planting_deines$Dataset <- factor(plot2_df_planting_deines$Dataset, levels = dataset_levels)
+
+# --- 2. THEME & COLOR SETUP ---
 vvg_colors <- vangogh_palette("SunflowersMunich", n = 5, type = "discrete")
-vg_colors <- vvg_colors[c(1,3,5)]
+vg_colors <- vvg_colors[c(1, 3, 5)]
 
-# --- Y-axis ranges
-y_rmse_range <- c(0, 14)  # Explicit for RMSE & MAE
-y_r2_range   <- c(0,1)
-y_bias_range <- c(-2,2)
+y_rmse_range <- c(0, 14)
+y_r2_range   <- c(0, 1)
+y_mbd_range  <- c(-2, 2) # Updated variable name for clarity
+r2_label     <- expression(italic(R)^2 ~ "(unitless)")
+mbd_label    <- "MBD (days)"
 
+# --- 3. PLOTTING FUNCTIONS ---
 # --- Function for RMSE+MAE
 make_rmse_mae_plot <- function(df, title, y_range) {
   ggplot(df, aes(x = Metric, y = Value, fill = Dataset)) +
@@ -726,16 +930,16 @@ make_rmse_mae_plot <- function(df, title, y_range) {
                                  sprintf("%.2f ± %.1f", Value, SD))),
               position = position_dodge(width = 1), vjust = -2.5, size =7 ) +
     scale_fill_manual(values = vg_colors) +
-    scale_y_continuous(limits = y_range, breaks = seq(0, 12, 4)) +  # explicit ticks 0,4,8,12
+    scale_y_continuous(limits = y_range, breaks = seq(0, 12, 4)) +
     labs(title = title, y = "Error", x = "") +
     theme_classic(base_size = 17) +
     theme(axis.title.y = element_text(size = 24),
           axis.text.y = element_text(size = 18),
           axis.text.x = element_text(size = 18),
-          plot.title = element_text(size = 17))
+          plot.title = element_text(size = 17, face = "bold"))   # <-- bold
 }
 
-# --- Function for R² or Bias
+# --- Function for R² or MBD
 make_score_plot <- function(df, y_label, title, y_range, vjust_text = -3) {
   ggplot(df, aes(x = Dataset, y = Value, fill = Dataset)) +
     geom_col(position = position_dodge(width = 0.7), width = 0.7) +
@@ -750,104 +954,80 @@ make_score_plot <- function(df, y_label, title, y_range, vjust_text = -3) {
     theme(axis.title.y = element_text(size = 22),
           axis.text.y = element_text(size = 18),
           axis.text.x = element_text(size = 18),
-          plot.title = element_text(size = 17))
+          plot.title = element_text(size = 17, face = "bold"))   # <-- bold
 }
 
-# --- R² y-axis label
-r2_label <- expression(italic(R)^2~"(unitless)")
+# --- 4. CREATE INDIVIDUAL PLOTS ---
 
-# --- Create main plots
-p1 <- make_rmse_mae_plot(plot1_rmse_mae_df, title = expression(PD[SOSDER] ~ ": MAE & RMSE"), y_range = y_rmse_range) +
-  guides(fill = guide_legend(title = "Fold", nrow = 1)) +
-  theme(legend.position = c(0.05, 1),
-        legend.justification = c(0,1),
-        legend.background = element_rect(fill = alpha('white', 0.6), color = NA),
-        legend.text = element_text(size = 18),
-        legend.title = element_text(size = 18),
-        axis.text.x  = element_blank(),
-        axis.title.x = element_blank())
+# PD[SOSDER] Plots
+p1 <- make_rmse_mae_plot(plot1_df, title = expression(PD[SOSDER] ~ ": MAE & RMSE"), y_range = y_rmse_range) +
+  guides(fill = guide_legend(title = "Dataset", nrow = 1)) +
+  theme(legend.position = c(0.05, 1), legend.justification = c(0, 1),
+        legend.background = element_rect(fill = alpha('white', 0.6)),
+        axis.text.x = element_blank())
 
-p2 <- make_score_plot(plot2_r2_df, y_label = r2_label,
-                      title = expression(PD[SOSDER] ~ ": " * italic(R)^2),
-                      y_range = y_r2_range,
-                      vjust_text = 3) +
-  theme(legend.position = "none",
-        axis.text.x  = element_blank(),
-        axis.title.x = element_blank())
+p2 <- make_score_plot(filter(plot2_df, Metric == "R²"), r2_label, 
+                      expression(PD[SOSDER] ~ ":" ~ italic(R)^2), y_r2_range, vjust_text = 2.5) +
+  theme(legend.position = "none", axis.text.x = element_blank())
 
-p3 <- make_score_plot(plot2_bias_df, y_label = "Bias (day)",
-                      title = expression(PD[SOSDER] ~ ": Bias"),
-                      y_range = y_bias_range,
-                      vjust_text = -3.5) +
-  theme(legend.position = "none",
-        axis.text.x  = element_blank(),
-        axis.title.x = element_blank())
+p3 <- make_score_plot(filter(plot2_df, Metric == "MBD"), mbd_label, 
+                      expression(PD[SOSDER] ~ ": MBD"), y_mbd_range, vjust_text = -3.5) +
+  theme(legend.position = "none", axis.text.x = element_blank())
 
-# --- Create Deines and LIMP plots similarly
-# Factor levels
-plot1_df_planting_pheno$Dataset <- factor(plot1_df_planting_pheno$Dataset, levels = c("Train","Validation","Test"))
-plot2_df_planting_pheno$Dataset <- factor(plot2_df_planting_pheno$Dataset, levels = c("Train","Validation","Test"))
-plot1_df_planting_deines$Dataset <- factor(plot1_df_planting_deines$Dataset, levels = c("Train","Validation","Test"))
-plot2_df_planting_deines$Dataset <- factor(plot2_df_planting_deines$Dataset, levels = c("Train","Validation","Test"))
+# Deines Plots
+p1_deines <- make_rmse_mae_plot(plot1_df_planting_deines, "Deines et al. (2023): MAE & RMSE", y_rmse_range) +
+  theme(legend.position = "none", axis.text.x = element_blank())
 
-# Separate metrics
-plot2_r2_pheno <- filter(plot2_df_planting_pheno, Metric == "R²")
-plot2_bias_pheno <- filter(plot2_df_planting_pheno, Metric == "Bias")
-plot2_r2_deines <- filter(plot2_df_planting_deines, Metric == "R²")
-plot2_bias_deines <- filter(plot2_df_planting_deines, Metric == "Bias")
+p2_deines <- make_score_plot(filter(plot2_df_planting_deines, Metric == "R²"), r2_label,
+                             expression("Deines RF:" ~ italic(R)^2), y_r2_range, vjust_text = 2.5) +
+  theme(legend.position = "none", axis.text.x = element_blank())
 
-# Deines
-p1_deines <- make_rmse_mae_plot(plot1_df_planting_deines, "Deines et al., 2023 Random Forest: MAE & RMSE", y_rmse_range) +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
-
-p2_deines <- make_score_plot(
-  plot2_r2_deines, 
-  r2_label, 
-  title = expression("Deines et al., 2023 Random Forest: " * italic(R)^2),  # R² italic
-  y_range = y_r2_range, 
-  vjust_text = 2.3
+# Deines plot MBD (F)
+p3_deines <- make_score_plot(
+  plot2_bias_deines, 
+  "MBD (days)", 
+  "Deines et al., 2023 Random Forest: MBD",  # <-- changed from Bias to MBD
+  y_bias_range, 
+  vjust_text = -1
 ) +
   theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
 
 
-p3_deines <- make_score_plot(plot2_bias_deines, "Bias (day)", "Deines et al., 2023 Random Forest: Bias", y_bias_range, vjust_text = -1) +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.title.x = element_blank())
-
-# LIMP
-p1_pheno <- make_rmse_mae_plot(plot1_df_planting_pheno, "LIMP Random Forest: MAE & RMSE", y_rmse_range) +
+# LIMP Plots
+p1_pheno <- make_rmse_mae_plot(plot1_df_planting_pheno, "LIMP RF: MAE & RMSE", y_rmse_range) +
   theme(legend.position = "none")
-p2_pheno <- make_score_plot(
-  plot2_r2_pheno, 
-  r2_label, 
-  title = expression("LIMP Random Forest: " * italic(R)^2),  # R² italic
-  y_range = y_r2_range, 
-  vjust_text = 2.3
+
+p2_pheno <- make_score_plot(filter(plot2_df_planting_pheno, Metric == "R²"), r2_label,
+                            expression("LIMP RF:" ~ italic(R)^2), y_r2_range, vjust_text = 2.5) +
+  theme(legend.position = "none")
+
+# LIMP plot MBD (I)
+p3_pheno <- make_score_plot(
+  plot2_bias_pheno, 
+  "MBD (days)", 
+  "LIMP Random Forest: MBD",  # <-- changed from Bias to MBD
+  y_bias_range, 
+  vjust_text = -1
 ) +
   theme(legend.position = "none")
 
-
-p3_pheno <- make_score_plot(plot2_bias_pheno, "Bias (day)", "LIMP Random Forest: Bias", y_bias_range, vjust_text = -1) +
-  theme(legend.position = "none")
-
-# --- Combine all plots 3x3
+# --- 5. COMBINE & SAVE ---
 combined_3x3 <- plot_grid(
   p1, p2, p3,
   p1_deines, p2_deines, p3_deines,
   p1_pheno, p2_pheno, p3_pheno,
-  labels = c("A","B","C","D","E","F","G","H","I"),
+  labels = "AUTO",
   ncol = 3, nrow = 3,
-  align = "v",
-  rel_widths = c(2,1,1),
-  label_size = 19,
-  label_fontface = "bold",
-  label_x = 0.95,
-  label_y = 0.95
+  align = "hv",
+  rel_widths = c(1.5, 1, 1),
+  label_size = 20,
+  label_fontface = "bold"
 )
-# --- Show
-combined_3x3
-# --- Save
-outfile <- file.path(out_dir, "Random Forest_Planting_9plots_Grid_LegendInside.png")
-ggsave(outfile, plot = combined_3x3, width = 22, height = 16, dpi = 200)
+
+# Show and Save
+print(combined_3x3)
+outfile <- file.path(out_dir, "Random_Forest_Planting_MBD_Updated.png")
+ggsave(outfile, plot = combined_3x3, width = 22, height = 16, dpi = 300)
 
 
 #---------------------------------------------------------------------------
@@ -980,6 +1160,7 @@ combined_pheno_plot
 # --- Save
 out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
 outfile <- file.path(out_dir, "RF_Harvest_Pheno_3plots_Grid_LegendBottom_Labeled.png")
+outfile
 ggsave(outfile, plot = combined_pheno_plot, width = 16, height = 5, dpi = 200)
 
 #---------------------------------------------------------------
@@ -1356,6 +1537,7 @@ p_harvest_total_importance <- ggplot(harvest_importance_long, aes(x = Value, y =
   )
 
 print(p_harvest_total_importance)
+p_harvest_total_importance
 # Save the plot for Harvest
 ggsave(
   filename = "harvesting_variable_importance_total_stacked_scaled.jpeg", # Changed filename
@@ -1554,6 +1736,164 @@ ggsave(
   height = 8,
   dpi = 500
 )
+#--------------------------------------------------
+#Climate anomalies 
+#----------------------------------------------------
+#-------------------------------
+# 1. Load climate data
+#-------------------------------
+clim <- read.csv("C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Data/Arkansas_Climate_2015_2024.csv")
+clim
+year_signal <- clim %>%
+  rename(
+    year_vpd  = vpd,
+    year_tmin = air_temp,
+    year_RH   = rh,
+    year_rad  = srad,
+    year_soil = soil_temp
+  ) %>%
+  mutate(
+    z_vpd  = scale(year_vpd)[,1],
+    z_tmin = scale(year_tmin)[,1],
+    z_RH   = scale(year_RH)[,1],
+    z_rad  = scale(year_rad)[,1],
+    z_soil = scale(year_soil)[,1]
+  )
+#-------------------------------
+# 2. Join with phenology data
+#-------------------------------
+pd_yr_clim <- pd_yr %>%
+  left_join(year_signal, by = "year")
+hd_yr_clim <- hd_yr %>%
+  left_join(year_signal, by = "year")
+#-------------------------------
+# 3. Prepare data function (NOW USING Z-SCORES)
+#-------------------------------
+prepare_data <- function(df){
+  
+  df_long <- df %>%
+    select(
+      mean_RMSE,
+      z_vpd,
+      z_tmin,
+      z_soil
+    ) %>%
+    pivot_longer(
+      cols = c(z_vpd, z_tmin, z_soil),
+      names_to = "variable",
+      values_to = "value"
+    )
+  
+  stats <- df_long %>%
+    group_by(variable) %>%
+    summarise(
+      cor_test = list(cor.test(value, mean_RMSE)),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      r = map_dbl(cor_test, ~ .x$estimate),
+      p = map_dbl(cor_test, ~ .x$p.value),
+      
+      # ✔ 2 significant figures for r
+      label = paste0(
+        "atop(italic(r)==", formatC(r, format = "fg", digits = 2),
+        ", italic(p)==", signif(p, 3), ")"
+      )
+    )
+  
+  list(data = df_long, stats = stats)
+}
+#-------------------------------
+# 4. Run analysis
+#-------------------------------
+pd_res <- prepare_data(pd_yr_clim)
+hd_res <- prepare_data(hd_yr_clim)
+pd_data  <- pd_res$data
+pd_stats <- pd_res$stats
+hd_data  <- hd_res$data
+hd_stats <- hd_res$stats
+
+#-------------------------------
+# 5. Rename panels
+#-------------------------------
+rename_map <- c(
+  "z_vpd"  = "VPD~mean",
+  "z_tmin" = "AirT[min]~mean",
+  "z_soil" = "SoilT[min]~mean"
+)
+
+pd_data$panel  <- recode(pd_data$variable, !!!rename_map)
+pd_stats$panel <- recode(pd_stats$variable, !!!rename_map)
+
+hd_data$panel  <- recode(hd_data$variable, !!!rename_map)
+hd_stats$panel <- recode(hd_stats$variable, !!!rename_map)
+pd_data
+hd_data
+#-------------------------------
+# 6. Plot function
+#-------------------------------
+make_plot <- function(data, stats, ylab){
+  
+  ggplot(data, aes(x = value, y = mean_RMSE)) +
+    geom_point(alpha = 0.75, size = 2.5) +
+    geom_smooth(method = "lm", se = FALSE, color = "black") +
+    
+    facet_wrap(~panel, ncol = 3, labeller = label_parsed) +
+    
+    labs(
+      x = "Annual Climate Anomaly (z-score)",
+      y = ylab
+    ) +
+    
+    theme_classic(base_size = 16) +
+    
+    geom_text(
+      data = stats,
+      aes(x = Inf, y = Inf, label = label),
+      inherit.aes = FALSE,
+      hjust = 1.55,
+      vjust = 1.3,
+      size = 6,
+      parse = TRUE
+    )
+}
+
+#-------------------------------
+# 7. Build plots
+#-------------------------------
+p1 <- make_plot(pd_data, pd_stats,
+                "RMSE (PD model, L2YO) (days)")
+p2 <- make_plot(hd_data, hd_stats,
+                "RMSE (HD model, L2YO)(days)")
+#-------------------------------
+# 8. Combine
+#-------------------------------
+combined_plot <- (p1 / p2) +
+  plot_annotation(
+    tag_levels = "A",
+    theme = theme(
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+      plot.tag   = element_text(size = 16, face = "bold")
+    )
+  )
+
+print(combined_plot)
+# -----------------------------
+# 7. Save Combined Plot for Manuscript
+# -----------------------------
+out_dir <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure"
+if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+ggsave(
+  filename = file.path(out_dir, "Combined_PD_HD_LO2YO_RMSE_drivers.png"),
+  plot     = combined_plot,
+  width    = 10,       # Slightly wider to comfortably fit multi-panel text
+  height   = 8,      # Taller canvas since we are stacking two multi-panel figures
+  dpi      = 300,     # Publication quality
+  bg       = "white"
+)
+
+cat("\n✓ Combined graph with A/B tags saved successfully to:", out_dir, "\n")
+
 
 
 #---------------------------------------------------------------
@@ -1968,9 +2308,6 @@ ggsave(
   height = 5,
   dpi = 300
 )
-
-
-
 
 
 #------------------------

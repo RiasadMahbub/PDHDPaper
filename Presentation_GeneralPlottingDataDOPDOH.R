@@ -2,6 +2,7 @@ library(ggplot2)
 library(dplyr)
 library(cowplot)
 library(vangogh)
+library(patchwork)
 
 # ---------------------------------------------------------------------------------
 # DATA PREPARATION
@@ -227,3 +228,25 @@ ggsave(
   height = 6,
   dpi = 300
 )
+
+
+#-----------------
+results <- data.frame(
+  Model = c("RF + Interpolation",
+            "RF + Interpolation (Extrapolation)",
+            "RF + Yearly Anomalies"),
+  
+  Target = c("PDDOY", "PDDOY", "PDDOY"),
+  ntrees = c(100, 100, 500),
+  mtry = c(3, 3, 4),
+  Features = c(6, 6, 15),
+  
+  Train_RMSE = c(6.2, 5.3, 4.51),
+  Test_RMSE  = c(8.67, 14.38, 12.67),
+  Test_MAE   = c(5.87, 10.89, 9.99),
+  Test_R2    = c(0.89, 0.54, 0.59)
+)
+
+results
+
+write.csv(results, "model_results.csv", row.names = FALSE) 

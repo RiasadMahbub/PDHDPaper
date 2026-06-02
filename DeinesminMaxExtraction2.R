@@ -286,3 +286,4 @@ deinesharmonicminmaxdf$Laglocalmaxglomax <- deinesharmonicminmaxdf$DOY_max_fit -
 deinesharmonicminmaxdf$Laglocalminglomax <- deinesharmonicminmaxdf$DOY_max_fit - deinesharmonicminmaxdf$DOY_max_before_min_fit
 deinesharmonicminmaxdf$Laglocalmaxlocalmin <- deinesharmonicminmaxdf$DOY_min_fit - deinesharmonicminmaxdf$DOY_max_before_min_fit
 mean_val <- mean(deinesharmonicminmaxdf$DOY_min_fit[deinesharmonicminmaxdf$DOY_min_fit >= 60], na.rm = TRUE)
+

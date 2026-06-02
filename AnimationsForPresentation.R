@@ -35,135 +35,140 @@ xcol <- if ("doy" %in% names(baker20_2019)) "doy" else if ("DOY" %in% names(bake
 kcol <- names(baker20_2019)[grepl("^kNDVI", names(baker20_2019))][1]
 if (is.na(kcol)) kcol <- names(baker20_2019)[grepl("^kNDVI_smoothed", names(baker20_2019))][1] # Use mock name if kNDVI not found
 if (is.na(kcol)) stop("No kNDVI column found")
+#========================================================
+# 1. EXTRACT PHENOLOGICAL DATES
+#========================================================
 
-# Extract scalar phenology values (first row)
+#--- Planting-related dates
 pddoy   <- as.numeric(baker20_2019$PDDOY[1])
 sos_trs <- as.numeric(baker20_2019$SOS_trs.sos[1])
 sos_der <- as.numeric(baker20_2019$SOS_deriv.sos[1])
 ud_val  <- as.numeric(baker20_2019$UD.UD[1])
 gu_val  <- as.numeric(baker20_2019$Greenup.Greenup[1])
 
-# --- Legend Data Frame for Vertical Lines ---
-pheno_lines <- data.frame(
-  DOY = c(pddoy, sos_trs, sos_der, ud_val, gu_val),
-  # --- UPDATED EVENT LABELS using expression() for subscripting ---
-  Event = c(
-    "PD", 
-    "SOS[TRS]", 
-    "SOS[DER]", 
-    "Upturn Date (UD)", 
-    "Greenup Date"
-  ),
-  Color = c("orange", "deepskyblue", "red", "purple", "navy")
-)
-# Ensure the factor levels keep the order defined above
-pheno_lines$Event <- factor(pheno_lines$Event, levels = pheno_lines$Event) 
-# --- End Legend Data Frame ---
+#--- Harvest-related dates
+hddoy   <- as.numeric(274)
+eos_trs <- as.numeric(baker20_2019$EOS_trs.eos[1])
+eos_der <- as.numeric(baker20_2019$EOS_deriv.eos[1])
+dd_val  <- as.numeric(baker20_2019$DD.DD[1])
+dor_val <- as.numeric(baker20_2019$Dormancy.Dormancy[1])
 
-# Compute y positions for horizontal segments
+#========================================================
+# 2. PHENOLOGICAL EVENTS DATA FRAME
+#========================================================
+
+pheno_lines <- data.frame(
+  DOY = c(pddoy, sos_trs, sos_der, ud_val, gu_val,
+          hddoy, eos_trs, eos_der, dd_val, dor_val),
+  Event = c("PD", "SOS[TRS]", "SOS[DER]", "UD", "Greenup",
+            "HD", "EOS[TRS]", "EOS[DER]", "DD", "Dormancy"),
+  Color = c("orange", "deepskyblue", "red", "purple", "navy",
+            "brown", "darkgreen", "indianred4", "magenta4", "black")
+)
+
+pheno_lines$Event <- factor(pheno_lines$Event, levels = pheno_lines$Event)
+
+pheno_lines$hjust_val <- 1.2 
+pheno_lines$hjust_val[pheno_lines$Event == "SOS[DER]"] <- -0.1
+pheno_lines$hjust_val[pheno_lines$Event == "EOS[DER]"] <- -0.1
+
+
+
+# Compute y-axis parameters
 kmin <- min(baker20_2019[[kcol]], na.rm = TRUE)
 kmax <- max(baker20_2019[[kcol]], na.rm = TRUE)
-yr <- kmax - kmin
-y1 <- kmax - 0.05 * yr    # Planting -> SOSTRS
-y2 <- kmax - 0.20 * yr    # Planting -> SOSDER
-y3 <- kmax - 0.35 * yr    # Planting -> UD
-y4 <- kmax - 0.50 * yr    # UD -> SOSTRS (not used in text labels, but kept for consistency)
-y5 <- kmax - 0.65 * yr    # Planting -> Greenup
+yr   <- kmax - kmin
 
-# Base plot
+# --- LOWERED BY 0.2 UNITS ---
+y1 <- (kmax - 0.05 * yr) - 0.2  
+y2 <- (kmax - 0.20 * yr) - 0.2  
+y3 <- (kmax - 0.35 * yr) - 0.2  
+y5 <- (kmax - 0.50 * yr) - 0.2  
+
+#========================================================
+# 3. BASE PLOT & STYLING
+#========================================================
+
 p <- ggplot(baker20_2019, aes_string(x = xcol, y = kcol)) +
+  annotate("rect", xmin = 163, xmax = 193, ymin = 0, ymax = 0.8, fill = "gray80", alpha = 0.4) +
   geom_point(color = "forestgreen", alpha = 0.6) +
-  labs(
-    x = "Day of Year (day)",
-    y = expression(italic(k) * "NDVI (unitless)")
-  ) +
-  theme_classic(base_size = 20) +
-  scale_x_continuous(breaks = seq(0, max(baker20_2019[[xcol]], na.rm = TRUE), by = 20)) +
+  labs(x = "Day of Year (DOY)", y = expression(italic(k) * "NDVI (unitless)")) +
+  theme_classic(base_size = 18) +
+  scale_x_continuous(breaks = seq(0, 365, by = 20), limits = c(0, 365)) +
   scale_y_continuous(breaks = seq(0, 0.8, by = 0.1), limits = c(0, 0.8)) +
-  
-  # --- Legend Adjustments ---
   scale_color_manual(
-    name = "Phenology Events", # Legend Title (will be hidden by element_blank below)
     values = setNames(pheno_lines$Color, pheno_lines$Event),
-    # Use expression() to correctly render the subscripted legend labels
-    labels = expression(
-      "PD", 
-      italic(SOS)[italic(TRS)], 
-      italic(SOS)[italic(DER)], 
-      italic(UD), 
-      Greenup
-    )
+    labels = expression("PD", italic(SOS)[italic(TRS)], italic(SOS)[italic(DER)], italic(UD), "Greenup",
+                        "HD", italic(EOS)[italic(TRS)], italic(EOS)[italic(DER)], italic(DD), "Dormancy")
   ) +
   theme(
-    legend.position = c(0.98, 0.98), # Top right corner (0,0 is bottom-left, 1,1 is top-right)
-    legend.justification = c("right", "top"),
-    legend.title = element_blank(), # Remove legend title for cleaner look
-    legend.background = element_rect(fill = "white", color = "black"), # Add a border/background
-    legend.key.size = unit(1.5, "lines"), # Adjust size of legend keys
-    legend.key.width = unit(3, "lines") # NEW: Increase width (length) of the line in the legend
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.background = element_rect(fill = "white", color = "black"),
+    legend.key.size = unit(1.2, "lines")
   ) +
-  # --- Increased line thickness in legend via size = 2 ---
-  guides(color = guide_legend(override.aes = list(linetype = "dashed", size = 5))) 
+  guides(color = guide_legend(override.aes = list(linetype = "dashed", linewidth = 1.2), ncol = 1))
 
+#========================================================
+# 4. VERTICAL LINES & POSITIONED ANNOTATIONS
+#========================================================
 
-# Add vertical lines for key phenology points (using new data frame and aes for legend)
 if (any(!is.na(pheno_lines$DOY))) {
-  p <- p + 
-    geom_vline(data = na.omit(pheno_lines), 
-               aes(xintercept = DOY, color = Event), 
-               linetype = "dashed", 
-               size = 0.7)
+  p <- p + geom_vline(data = na.omit(pheno_lines), 
+                      aes(xintercept = DOY, color = Event), 
+                      linetype = "dashed", linewidth = 0.8)
+  
+  p <- p + geom_text(data = na.omit(pheno_lines),
+                     aes(x = DOY-4, y = 0.75, label = Event, color = Event, hjust = hjust_val),
+                     angle = 90, size = 4, fontface = "bold", parse = TRUE, show.legend = FALSE)
 }
 
+#========================================================
+# 5. DURATION SEGMENTS & LABELS (Centered over segments)
+#========================================================
 
-# Add horizontal segments and labels between phenology points
-
-# --- REVISED SECTION FOR IMPROVED ITALICS AND SUBSCRIPT PARSING ---
-
-# Planting -> SOSTRS (Duration_PD and Period are italic, SOS is now italic)
+# PD -> SOS(TRS)
 if (!is.na(pddoy) && !is.na(sos_trs)) {
   p <- p +
-    annotate("segment", x = pddoy, xend = sos_trs, y = y1, yend = y1, colour = "deepskyblue", size = 1.2) +
-    annotate("text", x = (pddoy + sos_trs) / 2.85, y = y1 + 0.02 * yr,
-             # Label: Duration_PD_SOS[TRS] = X days
+    annotate("segment", x = pddoy, xend = sos_trs, y = y1, yend = y1, colour = "deepskyblue", linewidth = 1.2) +
+    annotate("text", x = (pddoy + sos_trs) / 3.4, y = y1 + 0.02,
              label = paste0("italic(Duration_PD_) * italic(SOS)[italic(TRS)] * \" = \" * ", round(sos_trs - pddoy, 1), " * days"),
-             colour = "deepskyblue", size = 5, hjust = 0.5, parse = TRUE)
+             colour = "deepskyblue", size = 4, hjust = 0.5, parse = TRUE)
 }
-# Planting -> SOSDER (Duration_PD and Period are italic, SOS is now italic)
+
+# PD -> SOS(DER)
 if (!is.na(pddoy) && !is.na(sos_der)) {
   p <- p +
-    annotate("segment", x = pddoy, xend = sos_der, y = y2, yend = y2, colour = "red", size = 1.2) +
-    annotate("text", x = (pddoy + sos_der) / 2.85, y = y2 + 0.02 * yr,
-             # Label: Duration_PD_SOS[DER] = X days
+    annotate("segment", x = pddoy, xend = sos_der, y = y2, yend = y2, colour = "red", linewidth = 1.2) +
+    annotate("text", x = (pddoy + sos_der) / 3.4, y = y2 + 0.02,
              label = paste0("italic(Duration_PD_) * italic(SOS)[italic(DER)] * \" = \" * ", round(sos_der - pddoy, 1), " * days"),
-             colour = "red", size = 5, hjust = 0.5, parse = TRUE)
+             colour = "red", size = 4, hjust = 0.5, parse = TRUE)
 }
 
-# Planting -> UD (Duration_PD_UD is italic)
+# PD -> UD
 if (!is.na(pddoy) && !is.na(ud_val)) {
   p <- p +
-    annotate("segment", x = pddoy, xend = ud_val, y = y3, yend = y3, colour = "purple", size = 1.2) +
-    annotate("text", x = (pddoy + ud_val) / 2.70, y = y3 + 0.02 * yr,
-             # Label: Duration_PD_UD = X days
+    annotate("segment", x = pddoy, xend = ud_val, y = y3, yend = y3, colour = "purple", linewidth = 1.2) +
+    annotate("text", x = (pddoy + ud_val) / 3.4, y = y3 + 0.02,
              label = paste0("italic(Duration_PD_UD) * \" = \" * ", round(ud_val - pddoy, 1), " * days"),
-             colour = "purple", size = 5, hjust = 0.5, parse = TRUE)
+             colour = "purple", size = 4, hjust = 0.5, parse = TRUE)
 }
 
-# NEW: Planting -> Greenup (Duration_PD_Greenup is italic)
+# PD -> Greenup
 if (!is.na(pddoy) && !is.na(gu_val)) {
   p <- p +
-    annotate("segment", x = pddoy, xend = gu_val, y = y5, yend = y5, colour = "navy", size = 1.2) +
-    annotate("text", x = (pddoy + gu_val) / 2.75, y = y5 + 0.02 * yr,
-             # Label: Duration_PD_Greenup = X days
+    annotate("segment", x = pddoy, xend = gu_val, y = y5, yend = y5, colour = "navy", linewidth = 1.2) +
+    annotate("text", x = (pddoy + gu_val) / 3.4, y = y5 + 0.02,
              label = paste0("italic(Duration_PD_Greenup) * \" = \" * ", round(gu_val - pddoy, 1), " * days"),
-             colour = "navy", size = 5, hjust = 0.5, parse = TRUE)
+             colour = "navy", size = 4, hjust = 0.5, parse = TRUE)
 }
-# Print plot
+
+#========================================================
+# 6. PRINT & SAVE
+#========================================================
 print(p)
-# define file path
-save_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/phenology_trs_lag.jpeg"
-# save the plot with 300 dpi
-ggsave(filename = save_path, plot = p, dpi = 300, width = 14, height = 6, units = "in")
+save_path <- "C:/Users/rbmahbub/Documents/RProjects/DOPDOHYIELD/Figure/ManuscriptFigure/phenology_lowered_segments.jpeg"
+ggsave(filename = save_path, plot = p, dpi = 300, width = 15, height = 7, units = "in")
 
 #-----------------------------------------------------------
 #GDD-VI Divergence-----------------------------------------

@@ -49,11 +49,12 @@ cat(sprintf(
 
 # --- Print features used for Planting Date (PD)
 cat("Features used in LIMP Random Forest to predict Planting Date (PDDOY):\n")
-cat(paste(sort(setdiff(LIMPRFPlantingFeatures, "PDDOY")), collapse = ", "))
+cat(paste(sort(setdiff(pd_feats, "PDDOY")), collapse = ", "))
 
 # --- Print features used for Harvest Date (HD)
 cat("\n\nFeatures used in LIMP Random Forest to predict Harvest Date (HDDOY):\n")
-cat(paste(sort(setdiff(LIMPRFHarvestFeatures, "HDDOY")), collapse = ", "))
+cat(paste(sort(setdiff(hd_feats, "HDDOY")), collapse = ", "))
+length(hd_feats)
 
 # --- Print features used in Deines Random Forest (Planting)
 cat("\n\nFeatures used in Deines Random Forest to predict Planting Date (PDDOY):\n")
@@ -95,10 +96,6 @@ paste0(
   "the Inflection method performed with ", HDmetrics_label3_clean, 
   "; and the Gu method performed with ", HDmetrics_label4_clean
 )
-
-
-
-
 #------------------------------------------------------------
 #------------------------------------------------------------
 #------------------------------------------------------------
@@ -591,76 +588,6 @@ cat(summary_sentence, "\n")
 
 
 
-
-#--------------------------------------------------------------------
-#Important Features
-#----#-------------PD---------------------
-top_vars_pd <- planting_importance_long %>%
-  distinct(Variable, Total_scaled) %>%   # keep only one row per variable
-  arrange(desc(Total_scaled)) %>%
-  slice(1:7)
-cat(
-  paste0(top_vars_pd$Variable, " (", round(top_vars_pd$Total_scaled, 2), ")",
-         collapse = "; "),
-  "\n"
-)
-top_vars_pd <- top_vars_pd %>% slice(1:7)  # replace top_vars_pd with your PD tibble
-# Make sure the column names are correct
-pd_sentence <- paste0(
-  "For PD prediction, the most important variables based on the composite variable importance score were ",
-  paste0(top_vars_pd$Variable, " (", round(top_vars_pd$Total_scaled, 2), ")", collapse = ", "),
-  " (Figure S5)."
-)
-cat(pd_sentence, "\n")
-
-
-#-------------HD---------------------
-#------------- HD ---------------------
-top_vars_hd <- harvest_importance_long %>%
-  distinct(variable, Total_scaled) %>%   # keep only one row per variable
-  arrange(desc(Total_scaled)) %>%
-  slice(1:7)
-
-# Print HD variables
-cat(
-  paste0(top_vars_hd$variable, " (", round(top_vars_hd$Total_scaled, 2), ")",
-         collapse = "; "),
-  "\n"
-)
-
-# Create HD summary sentence
-hd_sentence <- paste0(
-  "For HD prediction, the most important variables based on the composite variable importance score were ",
-  paste0(top_vars_hd$variable, " (", round(top_vars_hd$Total_scaled, 2), ")", collapse = ", "),
-  " (Figure S4)."
-)
-cat(hd_sentence, "\n")
-
-###----------------------------------------------------------
-#Correlation
-###----------------------------------------------------------
-
-# Print top 7 correlations of PD with other features (descending)
-df_corr <- df %>%
-  dplyr::select(
-    cum_RH, SOS_trs.sos, SOS_deriv.sos, UD.UD,
-    cum_meansrad, avgsoilorg, cum_tmin, EOS_trs.eos,
-    EOS_deriv.eos, cum_soiltemp, cum_gdd, DD.DD, cum_vpd,
-    Value_max_obs, PDDOY
-  ) %>%
-  # Filter and drop NA as in your original script
-  filter(!is.na(PDDOY)) %>%
-  drop_na()
-
-# Create the correlation matrix
-corr_mat <- cor(df_corr, use = "pairwise.complete.obs")
-pd_corrs <- corr_mat["PDDOY", colnames(corr_mat) != "PDDOY"]
-top7 <- sort(pd_corrs, decreasing = TRUE)[1:7]
-top7_rounded <- round(top7, 2)
-print(top7_rounded)
-# optional single-line print
-cat("Top 7 correlations with PD:", paste(names(top7_rounded), top7_rounded, collapse = "; "), "\n")
-
 ###----------------------------------------------------------
 ## rsp and rau
 #------------------------------------------------------------------
@@ -778,4 +705,811 @@ cat(
   sep = " "
 )
 
+
+# ==============================================================================
+# DYNAMIC MANUSCRIPT TEXT GENERATOR FOR CROP PHENOLOGY STUDY
+# ==============================================================================
+# This script reads your summary and test objects, performs calculations,
+# and prints out publication-ready paragraphs using strict LaTeX formatting.
+#
+# Ensure your model objects (pd_random, pd_final, hd_random, hd_final,
+# sosder_summary, deines_pd_l2yo, phenology_df, and df)
+# are already loaded in memory before running.
+# ==============================================================================
+
+library(dplyr)
+library(tidyr)
+
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
+
+# Safe extractor for nested object values
+safe_get <- function(obj, path, default = 0.0) {
+  
+  val <- tryCatch(
+    eval(parse(text = paste0("obj$", path))),
+    error = function(e) NULL
+  )
+  
+  if (is.null(val) || length(val) == 0 || is.na(val)) {
+    return(default)
+  }
+  
+  as.numeric(val[1])
+}
+
+# Format mean ± sd for LaTeX text
+fmt_sd <- function(mean_val, sd_val = NA, digits = 2) {
+  
+  if (is.na(mean_val)) return("—")
+  
+  if (!is.na(sd_val) && sd_val > 0) {
+    return(sprintf(
+      "%.*f \\\\pm %.*f",
+      digits, mean_val,
+      digits, sd_val
+    ))
+  }
+  
+  sprintf("%.*f", digits, mean_val)
+}
+
+# ==============================================================================
+# 1. PLANTING DATE (PD) METRICS EXTRACTION
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# LIMP RF (Random Split) PD
+# ------------------------------------------------------------------------------
+
+limp_pd_tr_mae  <- safe_get(pd_random, "summary$Train_MAE_mean")
+limp_pd_tr_rmse <- safe_get(pd_random, "summary$Train_RMSE_mean")
+limp_pd_tr_r2   <- safe_get(pd_random, "summary$Train_R2_mean")
+limp_pd_tr_mbe  <- safe_get(pd_random, "summary$Train_MBE_mean")
+
+limp_pd_val_mae  <- safe_get(pd_random, "summary$Val_MAE_mean")
+limp_pd_val_rmse <- safe_get(pd_random, "summary$Val_RMSE_mean")
+limp_pd_val_r2   <- safe_get(pd_random, "summary$Val_R2_mean")
+limp_pd_val_mbe  <- safe_get(pd_random, "summary$Val_MBE_mean")
+
+limp_pd_te_mae  <- safe_get(pd_random, "test$Test_MAE")
+limp_pd_te_rmse <- safe_get(pd_random, "test$Test_RMSE")
+limp_pd_te_r2   <- safe_get(pd_random, "test$Test_R2")
+limp_pd_te_mbe  <- safe_get(pd_random, "test$Test_MBE")
+
+# ------------------------------------------------------------------------------
+# LIMP RF (L2YO) PD
+# ------------------------------------------------------------------------------
+
+limp_pd_l2yo_tr_mae  <- safe_get(pd_final, "summary$Train_MAE")
+limp_pd_l2yo_tr_rmse <- safe_get(pd_final, "summary$Train_RMSE")
+limp_pd_l2yo_tr_r2   <- safe_get(pd_final, "summary$Train_R2")
+limp_pd_l2yo_tr_mbe  <- safe_get(pd_final, "summary$Train_MBE")
+
+limp_pd_l2yo_te_mae  <- safe_get(pd_final, "summary$Test_MAE")
+limp_pd_l2yo_te_rmse <- safe_get(pd_final, "summary$Test_RMSE")
+limp_pd_l2yo_te_r2   <- safe_get(pd_final, "summary$Test_R2")
+limp_pd_l2yo_te_mbe  <- safe_get(pd_final, "summary$Test_MBE")
+
+# ------------------------------------------------------------------------------
+# PDSOSDER (L2YO)
+# ------------------------------------------------------------------------------
+
+sosder_te_rmse <- safe_get(sosder_summary, "Test_RMSE_mean")
+sosder_te_mae  <- safe_get(sosder_summary, "Test_MAE_mean")
+sosder_te_r2   <- safe_get(sosder_summary, "Test_R2_mean")
+sosder_te_mbe  <- safe_get(sosder_summary, "Test_Bias_mean")
+
+# ------------------------------------------------------------------------------
+# Deines RF (L2YO) PD
+# ------------------------------------------------------------------------------
+
+deines_pd_tr_mae  <- safe_get(deines_pd_l2yo, "summary$Train_MAE")
+deines_pd_tr_rmse <- safe_get(deines_pd_l2yo, "summary$Train_RMSE")
+deines_pd_tr_r2   <- safe_get(deines_pd_l2yo, "summary$Train_R2")
+deines_pd_tr_mbe  <- safe_get(deines_pd_l2yo, "summary$Train_Bias")
+
+deines_pd_te_mae  <- safe_get(deines_pd_l2yo, "summary$Test_MAE")
+deines_pd_te_rmse <- safe_get(deines_pd_l2yo, "summary$Test_RMSE")
+deines_pd_te_r2   <- safe_get(deines_pd_l2yo, "summary$Test_R2")
+deines_pd_te_mbe  <- safe_get(deines_pd_l2yo, "summary$Test_Bias")
+
+# ==============================================================================
+# 2. HARVEST DATE (HD) METRICS EXTRACTION
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# LIMP RF (Random Split) HD
+# ------------------------------------------------------------------------------
+
+limp_hd_tr_mae  <- safe_get(hd_random, "summary$Train_MAE_mean")
+limp_hd_tr_rmse <- safe_get(hd_random, "summary$Train_RMSE_mean")
+limp_hd_tr_r2   <- safe_get(hd_random, "summary$Train_R2_mean")
+limp_hd_tr_mbe  <- safe_get(hd_random, "summary$Train_MBE_mean")
+
+limp_hd_val_mae     <- safe_get(hd_random, "summary$Val_MAE_mean")
+limp_hd_val_rmse    <- safe_get(hd_random, "summary$Val_RMSE_mean")
+limp_hd_val_rmse_sd <- safe_get(hd_random, "summary$Val_RMSE_sd")
+limp_hd_val_r2      <- safe_get(hd_random, "summary$Val_R2_mean")
+
+limp_hd_te_mae  <- safe_get(hd_random, "test$Test_MAE")
+limp_hd_te_rmse <- safe_get(hd_random, "test$Test_RMSE")
+limp_hd_te_r2   <- safe_get(hd_random, "test$Test_R2")
+
+# ------------------------------------------------------------------------------
+# LIMP RF (L2YO) HD
+# ------------------------------------------------------------------------------
+
+limp_hd_l2yo_tr_rmse <- safe_get(hd_final, "summary$Train_RMSE")
+limp_hd_l2yo_tr_r2   <- safe_get(hd_final, "summary$Train_R2")
+
+limp_hd_l2yo_te_rmse    <- safe_get(hd_final, "summary$Test_RMSE")
+limp_hd_l2yo_te_rmse_sd <- safe_get(hd_final, "summary$Test_RMSE_sd")
+
+limp_hd_l2yo_te_mae     <- safe_get(hd_final, "summary$Test_MAE")
+limp_hd_l2yo_te_mae_sd  <- safe_get(hd_final, "summary$Test_MAE_sd")
+
+limp_hd_l2yo_te_r2      <- safe_get(hd_final, "summary$Test_R2")
+
+# ==============================================================================
+# 3. MATHEMATICAL RECALCULATIONS & COMPARATIVE ANALYSES
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# PD vs HD Random Split differences
+# ------------------------------------------------------------------------------
+
+mae_diff_train <- abs(limp_pd_tr_mae - limp_hd_tr_mae)
+mae_diff_val   <- abs(limp_pd_val_mae - limp_hd_val_mae)
+mae_diff_test  <- abs(limp_pd_te_mae - limp_hd_te_mae)
+
+r2_diff_train <- abs(limp_pd_tr_r2 - limp_hd_tr_r2)
+r2_diff_val   <- abs(limp_pd_val_r2 - limp_hd_val_r2)
+r2_diff_test  <- abs(limp_pd_te_r2 - limp_hd_te_r2)
+
+# ------------------------------------------------------------------------------
+# L2YO degradation
+# ------------------------------------------------------------------------------
+
+hd_degradation <- limp_hd_l2yo_te_mae - limp_hd_te_mae
+pd_degradation <- limp_pd_l2yo_te_mae - limp_pd_te_mae
+
+# ==============================================================================
+# 4. CURVE CHARACTERISTICS & TEMPORAL LAGS SUMMARY
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Rate calculations from phenology dataframe
+# ------------------------------------------------------------------------------
+
+mean_rsp <- mean(phenology_df$rsp.rsp, na.rm = TRUE)
+sd_rsp   <- sd(phenology_df$rsp.rsp, na.rm = TRUE)
+
+mean_rau <- mean(phenology_df$rau.rau, na.rm = TRUE)
+sd_rau   <- sd(phenology_df$rau.rau, na.rm = TRUE)
+
+# ------------------------------------------------------------------------------
+# Time-to-peak dynamics
+# ------------------------------------------------------------------------------
+
+mean_to_peak_pd <- mean(df$PDMaxdays, na.rm = TRUE)
+sd_to_peak_pd   <- sd(df$PDMaxdays, na.rm = TRUE)
+
+mean_to_peak_hd <- mean(df$HDMaxdays, na.rm = TRUE)
+sd_to_peak_hd   <- sd(df$HDMaxdays, na.rm = TRUE)
+
+# ------------------------------------------------------------------------------
+# Planting date tertile splitting
+# ------------------------------------------------------------------------------
+
+df_percentile <- df %>%
+  mutate(
+    PD_group = cut(
+      PDDOY,
+      breaks = quantile(
+        PDDOY,
+        probs = c(0, 1/3, 2/3, 1),
+        na.rm = TRUE
+      ),
+      include.lowest = TRUE,
+      labels = c("Early", "Mid", "Late")
+    )
+  )
+
+cohort_summary <- df_percentile %>%
+  group_by(PD_group) %>%
+  summarise(
+    
+    mean_sosder = mean(as.numeric(PD_SOSDER), na.rm = TRUE),
+    sd_sosder   = sd(as.numeric(PD_SOSDER), na.rm = TRUE),
+    
+    mean_sostrs = mean(as.numeric(PD_SOSTRS), na.rm = TRUE),
+    sd_sostrs   = sd(as.numeric(PD_SOSTRS), na.rm = TRUE),
+    
+    mean_ud     = mean(as.numeric(PD_UD), na.rm = TRUE),
+    sd_ud       = sd(as.numeric(PD_UD), na.rm = TRUE),
+    
+    .groups = "drop"
+  )
+# ------------------------------------------------------------------------------
+# Safe cohort extraction
+# ------------------------------------------------------------------------------
+
+get_cohort_row <- function(grp) {
+  
+  cohort_summary %>%
+    filter(PD_group == grp) %>%
+    as.list()
+}
+
+early_grp <- get_cohort_row("Early")
+mid_grp   <- get_cohort_row("Mid")
+late_grp  <- get_cohort_row("Late")
+
+# ==============================================================================
+# 5. PRINT MANUSCRIPT SECTIONS
+# ==============================================================================
+
+cat("\n==============================================================================\n")
+cat("                GENERATED MANUSCRIPT LINES (LaTeX FORMAT)\n")
+cat("==============================================================================\n\n")
+
+# ==============================================================================
+# SECTION 3.X
+# ==============================================================================
+
+cat("## SECTION 3.X: Model Performance Comparison for Planting Date (PD)\n\n")
+
+cat(sprintf(
+  "Across the two splitting strategies, the LIMP RF model exhibited a range of predictive performance depending on how the data was partitioned. Under the standard Random Split strategy, the model achieved highly robust results, with a training MAE of %.2f days (RMSE = %.2f days, R² = %.3f, MBE = %.2f days), a validation MAE of %.2f days (RMSE = %.2f days, R² = %.3f, MBE = %.2f days), and a testing MAE of %.2f days (RMSE = %.2f days, R² = %.3f, MBE = %.2f days).\n\n",
+  
+  limp_pd_tr_mae,
+  limp_pd_tr_rmse,
+  limp_pd_tr_r2,
+  limp_pd_tr_mbe,
+  
+  limp_pd_val_mae,
+  limp_pd_val_rmse,
+  limp_pd_val_r2,
+  limp_pd_val_mbe,
+  
+  limp_pd_te_mae,
+  limp_pd_te_rmse,
+  limp_pd_te_r2,
+  limp_pd_te_mbe
+))
+
+
+cat(sprintf(
+  "When evaluating the strict L2YO strategy across all architectures, the linear-based PDSOSDER model performed better than the two machine learning models on the test set. PDSOSDER achieved the lowest overall test error with an $\\\\text{RMSE}$ of %.2f days and a baseline $\\\\text{MAE}$ of %.2f days, while maintaining a strong goodness-of-fit ($R^2 = %.3f$, $\\\\text{MBE} = %.2f\\\\text{ days}$).\n\n",
+  
+  sosder_te_rmse,
+  sosder_te_mae,
+  sosder_te_r2,
+  sosder_te_mbe
+))
+
+cat(sprintf(
+  "In contrast, the machine learning models struggled significantly with out-of-year generalization. While the Deines RF model achieved a very tight fit during the training phase ($\\\\text{MAE} = %.2f\\\\text{ days}$, $\\\\text{RMSE} = %.2f\\\\text{ days}$, $R^2 = %.3f$, $\\\\text{MBE} = %.2f\\\\text{ days}$), its performance collapsed under the L2YO testing framework, resulting in the highest errors and lowest predictive power across the entire study, with a testing $\\\\text{MAE}$ of %.2f days, an $\\\\text{RMSE}$ of %.2f days, an $R^2$ of only %.3f, and a severe underprediction bias ($\\\\text{MBE} = %.2f\\\\text{ days}$).\n\n",
+  
+  deines_pd_tr_mae,
+  deines_pd_tr_rmse,
+  deines_pd_tr_r2,
+  deines_pd_tr_mbe,
+  
+  deines_pd_te_mae,
+  deines_pd_te_rmse,
+  deines_pd_te_r2,
+  deines_pd_te_mbe
+))
+
+# ==============================================================================
+# SECTION 4.2
+# ==============================================================================
+
+cat("------------------------------------------------------------------------------\n")
+cat("## SECTION 4.2: Harvest Date (HD) is Better Predicted than Planting Date (PD)\n\n")
+
+cat(sprintf(
+  "Harvest date (HD) predictions were generally more accurate than planting date (PD) predictions across both machine learning and phenology-based approaches. For the LIMP Random Forest model under the standard Random Split setting, HD prediction achieved a validation $\\\\text{MAE}$ of %.2f days ($\\\\text{RMSE} = %s\\\\text{ days}$, $R^2 = %.3f$) and a test $\\\\text{MAE}$ of %.2f days ($\\\\text{RMSE} = %.2f\\\\text{ days}$, $R^2 = %.3f$).\n\n",
+  
+  limp_hd_val_mae,
+  fmt_sd(limp_hd_val_rmse, limp_hd_val_rmse_sd),
+  limp_hd_val_r2,
+  
+  limp_hd_te_mae,
+  limp_hd_te_rmse,
+  limp_hd_te_r2
+))
+
+cat(sprintf(
+  "Compared with PD prediction under the Random Split strategy, HD prediction by LIMP reduced $\\\\text{MAE}$ by %.2f days on the training set (%.2f days vs. %.2f days), %.2f days on the validation set (%.2f days vs. %.2f days), and %.2f days on the test set (%.2f days vs. %.2f days). Conversely, the explained variance slightly decreased for HD compared to PD, with $R^2$ dropping by %.3f on the training set (%.3f vs. %.3f), by %.3f on the validation set (%.3f vs. %.3f), and by %.3f on the test set (%.3f vs. %.3f).\n\n",
+  
+  mae_diff_train,
+  limp_pd_tr_mae,
+  limp_hd_tr_mae,
+  
+  mae_diff_val,
+  limp_pd_val_mae,
+  limp_hd_val_mae,
+  
+  mae_diff_test,
+  limp_pd_te_mae,
+  limp_hd_te_mae,
+  
+  r2_diff_train,
+  limp_pd_tr_r2,
+  limp_hd_tr_r2,
+  
+  r2_diff_val,
+  limp_pd_val_r2,
+  limp_hd_val_r2,
+  
+  r2_diff_test,
+  limp_pd_te_r2,
+  limp_hd_te_r2
+))
+
+cat(sprintf(
+  "For harvest date prediction, the LIMP RF model also exhibited differences in performance when moving to the Leave-Two-Years-Out (L2YO) evaluation structure. Under L2YO evaluation, test performance changed to an $\\\\text{RMSE}$ of %s days, an $\\\\text{MAE}$ of %s days, and an $R^2$ of %.3f. The training $\\\\text{RMSE}$ under L2YO was %.2f days with an $R^2$ of %.3f.\n\n",
+  
+  fmt_sd(limp_hd_l2yo_te_rmse, limp_hd_l2yo_te_rmse_sd),
+  fmt_sd(limp_hd_l2yo_te_mae, limp_hd_l2yo_te_mae_sd),
+  
+  limp_hd_l2yo_te_r2,
+  limp_hd_l2yo_tr_rmse,
+  limp_hd_l2yo_tr_r2
+))
+
+cat(sprintf(
+  "Comparing the evaluation strategies reveals that the difference between Random Split and L2YO performance is smaller for HD than what is observed for PD in the same framework. For instance, the increase in test $\\\\text{MAE}$ from Random Split to L2YO was only %.2f days for HD (%.2f days to %.2f days), whereas PD test $\\\\text{MAE}$ degraded by %.2f days (%.2f days to %.2f days). This indicates that HD performance varies less between the two evaluation approaches and is more robust to interannual climate variations relative to PD.\n\n",
+  
+  hd_degradation,
+  limp_hd_te_mae,
+  limp_hd_l2yo_te_mae,
+  
+  pd_degradation,
+  limp_pd_te_mae,
+  limp_pd_l2yo_te_mae
+))
+
+# ==============================================================================
+# ENVIRONMENTAL CONTROLS & DYNAMICS
+# ==============================================================================
+
+cat("------------------------------------------------------------------------------\n")
+cat("## Statistical Reference: Environmental Controls & Dynamics\n\n")
+
+cat(sprintf(
+  "* The rate of spring green-up ($\\\\text{rsp}$), calculated as the first derivative at the point of maximum increase during the start-of-season (SOS), had a mean of %s.\n",
+  fmt_sd(mean_rsp, sd_rsp, 4)
+))
+
+cat(sprintf(
+  "* The rate of autumn senescence ($\\\\text{rau}$), calculated as the first derivative at the point of maximum decrease during the end-of-season (EOS), had a mean of %s.\n",
+  fmt_sd(mean_rau, sd_rau, 4)
+))
+
+cat(sprintf(
+  "* The mean time from PD to $\\\\text{kNDVI}_{\\\\max}$ (time to peak) is %s days, whereas the mean time from peak to harvest is shorter at %s days.\n\n",
+  fmt_sd(mean_to_peak_pd, sd_to_peak_pd, 1),
+  fmt_sd(mean_to_peak_hd, sd_to_peak_hd, 1)
+))
+
+cat("Duration values across planting date percentiles:\n")
+
+cat(sprintf(
+  "* The Early percentile of PD fields has planting-to-initial phenology values: $\\\\text{Duration}_{\\\\text{PD-SOSDER}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-SOSTRS}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-UD}} = %s\\\\text{ days}$.\n",
+  
+  fmt_sd(early_grp$mean_sosder, early_grp$sd_sosder, 2),
+  fmt_sd(early_grp$mean_sostrs, early_grp$sd_sostrs, 2),
+  fmt_sd(early_grp$mean_ud, early_grp$sd_ud, 2)
+))
+
+cat(sprintf(
+  "* The Mid percentile of PD fields has planting-to-initial phenology values: $\\\\text{Duration}_{\\\\text{PD-SOSDER}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-SOSTRS}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-UD}} = %s\\\\text{ days}$.\n",
+  
+  fmt_sd(mid_grp$mean_sosder, mid_grp$sd_sosder, 2),
+  fmt_sd(mid_grp$mean_sostrs, mid_grp$sd_sostrs, 2),
+  fmt_sd(mid_grp$mean_ud, mid_grp$sd_ud, 2)
+))
+
+cat(sprintf(
+  "* The Late percentile of PD fields has planting-to-initial phenology values: $\\\\text{Duration}_{\\\\text{PD-SOSDER}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-SOSTRS}} = %s\\\\text{ days}$; $\\\\text{Duration}_{\\\\text{PD-UD}} = %s\\\\text{ days}$.\n\n",
+  
+  fmt_sd(late_grp$mean_sosder, late_grp$sd_sosder, 2),
+  fmt_sd(late_grp$mean_sostrs, late_grp$sd_sostrs, 2),
+  fmt_sd(late_grp$mean_ud, late_grp$sd_ud, 2)
+))
+
+cat("==============================================================================\n")
+
+
+
+# =========================================================
+# IMPORTANT FEATURES — UPDATED FOR NEW MODEL OBJECTS
+# Uses: pd_random$vi_summary, pd_final$vi_summary,
+#       hd_random$vi_summary, hd_final$vi_summary
+# =========================================================
+
+# Helper function
+extract_top_vars <- function(vi_summary,
+                             top_n = 7,
+                             gini_scale = 5000) {
+  
+  vi_summary %>%
+    rename(
+      IncMSE = MeanIncMSE,
+      Gini   = MeanIncNodePurity
+    ) %>%
+    mutate(
+      Gini_scaled = Gini / gini_scale,
+      Total_scaled = IncMSE + Gini_scaled
+    ) %>%
+    arrange(desc(Total_scaled)) %>%
+    slice(1:top_n)
+}
+
+# =========================================================
+# PD RANDOM SPLIT
+# =========================================================
+
+top_vars_pd_random <- extract_top_vars(pd_random$vi_summary)
+
+cat(
+  paste0(
+    top_vars_pd_random$variable,
+    " (",
+    round(top_vars_pd_random$Total_scaled, 2),
+    ")",
+    collapse = "; "
+  ),
+  "\n"
+)
+
+pd_random_sentence <- paste0(
+  "For PD prediction under the random split validation, ",
+  "the most important variables based on the composite variable importance score were ",
+  paste0(
+    top_vars_pd_random$variable,
+    " (",
+    round(top_vars_pd_random$Total_scaled, 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure S1A)."
+)
+
+cat(pd_random_sentence, "\n\n")
+
+
+# =========================================================
+# PD L2YO
+# =========================================================
+
+top_vars_pd_l2yo <- extract_top_vars(pd_final$vi_summary)
+
+cat(
+  paste0(
+    top_vars_pd_l2yo$variable,
+    " (",
+    round(top_vars_pd_l2yo$Total_scaled, 2),
+    ")",
+    collapse = "; "
+  ),
+  "\n"
+)
+
+pd_l2yo_sentence <- paste0(
+  "For PD prediction under leave-two-years-out (L2YO) validation, ",
+  "the most important variables based on the composite variable importance score were ",
+  paste0(
+    top_vars_pd_l2yo$variable,
+    " (",
+    round(top_vars_pd_l2yo$Total_scaled, 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure S1B)."
+)
+
+cat(pd_l2yo_sentence, "\n\n")
+
+
+# =========================================================
+# HD RANDOM SPLIT
+# =========================================================
+
+top_vars_hd_random <- extract_top_vars(hd_random$vi_summary)
+
+cat(
+  paste0(
+    top_vars_hd_random$variable,
+    " (",
+    round(top_vars_hd_random$Total_scaled, 2),
+    ")",
+    collapse = "; "
+  ),
+  "\n"
+)
+
+hd_random_sentence <- paste0(
+  "For HD prediction under the random split validation, ",
+  "the most important variables based on the composite variable importance score were ",
+  paste0(
+    top_vars_hd_random$variable,
+    " (",
+    round(top_vars_hd_random$Total_scaled, 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure S2A)."
+)
+
+cat(hd_random_sentence, "\n\n")
+
+
+# =========================================================
+# HD L2YO
+# =========================================================
+
+top_vars_hd_l2yo <- extract_top_vars(hd_final$vi_summary)
+
+cat(
+  paste0(
+    top_vars_hd_l2yo$variable,
+    " (",
+    round(top_vars_hd_l2yo$Total_scaled, 2),
+    ")",
+    collapse = "; "
+  ),
+  "\n"
+)
+
+hd_l2yo_sentence <- paste0(
+  "For HD prediction under leave-two-years-out (L2YO) validation, ",
+  "the most important variables based on the composite variable importance score were ",
+  paste0(
+    top_vars_hd_l2yo$variable,
+    " (",
+    round(top_vars_hd_l2yo$Total_scaled, 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure S2B)."
+)
+
+cat(hd_l2yo_sentence, "\n\n")
+
+
+# =========================================================
+# CLIMATE DISTANCE vs RMSE CORRELATIONS
+# =========================================================
+
+# ----- PD correlations -----
+
+pd_corr_summary <- stats_pd %>%
+  mutate(
+    variable = recode(
+      variable,
+      z_vpd_mean  = "mean VPD anomaly",
+      z_gdd_mean  = "mean GDD anomaly",
+      z_tmin_mean = "mean Tmin anomaly"
+    )
+  )
+
+cat("PD climate sensitivity correlations:\n")
+
+cat(
+  paste0(
+    pd_corr_summary$variable,
+    " (r = ",
+    round(pd_corr_summary$r, 3),
+    ", p = ",
+    signif(pd_corr_summary$p, 3),
+    ")",
+    collapse = "; "
+  ),
+  "\n\n"
+)
+
+pd_climate_sentence <- paste0(
+  "For PD prediction, pair-level L2YO test RMSE showed relationships with interannual climate conditions, including ",
+  paste0(
+    pd_corr_summary$variable,
+    " (r = ",
+    round(pd_corr_summary$r, 3),
+    ", p = ",
+    signif(pd_corr_summary$p, 3),
+    ")",
+    collapse = ", "
+  ),
+  "."
+)
+
+cat(pd_climate_sentence, "\n\n")
+
+
+# ----- HD correlations -----
+
+hd_corr_summary <- stats_hd %>%
+  mutate(
+    variable = recode(
+      variable,
+      z_vpd_mean  = "mean VPD anomaly",
+      z_gdd_mean  = "mean GDD anomaly",
+      z_tmin_mean = "mean Tmin anomaly"
+    )
+  )
+
+cat("HD climate sensitivity correlations:\n")
+
+cat(
+  paste0(
+    hd_corr_summary$variable,
+    " (r = ",
+    round(hd_corr_summary$r, 3),
+    ", p = ",
+    signif(hd_corr_summary$p, 3),
+    ")",
+    collapse = "; "
+  ),
+  "\n\n"
+)
+
+hd_climate_sentence <- paste0(
+  "For HD prediction, pair-level L2YO test RMSE showed relationships with interannual climate conditions, including ",
+  paste0(
+    hd_corr_summary$variable,
+    " (r = ",
+    round(hd_corr_summary$r, 3),
+    ", p = ",
+    signif(hd_corr_summary$p, 3),
+    ")",
+    collapse = ", "
+  ),
+  "."
+)
+
+cat(hd_climate_sentence, "\n")
+# =========================================================
+# CORRELATIONS FOR SELECTED PD FEATURES
+# =========================================================
+
+# Keep only selected PD features + target
+pd_corr_df <- df_pd_rfe %>%
+  dplyr::select(all_of(c("PDDOY", pd_feats))) %>%
+  drop_na()
+
+# Correlation matrix
+corr_mat_pd <- cor(pd_corr_df, use = "pairwise.complete.obs")
+
+# Correlations with PDDOY
+pd_corrs <- corr_mat_pd["PDDOY", colnames(corr_mat_pd) != "PDDOY"]
+
+# Sort descending
+pd_corrs_sorted <- sort(pd_corrs, decreasing = TRUE)
+# Pretty labels with plotmath-style subscripts
+label_map_pd <- c(
+  "SOS_trs.sos"   = "SOS[TRS]",
+  "SOS_deriv.sos" = "SOS[DER]",
+  "UD.UD"         = "UD",
+  "cum_tmin"      = "AirT[min[cum]]",
+  "cum_soiltemp"  = "SoilT[mean[cum]]",
+  "avgsoilorg"    = "SOC[mean]"
+)
+
+label_map_hd <- c(
+  "a1"                     = "kNDVI[a1]",
+  "a2"                     = "kNDVI[a2]",
+  "avgsoilorg"             = "SOC[mean]",
+  "cum_gdd"                = "GDD[cum]",
+  "cum_RH"                 = "RH[cum]",
+  "cum_soiltemp"           = "SoilT[mean[cum]]",
+  "cum_vpd"                = "VPD[cum]",
+  "DOY_max_before_min_fit" = "DOY[earlymin[kNDVI]]",
+  "EOS_deriv.eos"          = "EOS[DER]",
+  "EOS_trs.eos"            = "EOS[TRS]",
+  "eos_x_sos"              = "EOS[TRS] %*% SOS[TRS]",
+  "RD.RD"                  = "RD",
+  "SD.SD"                  = "SD",
+  "sd_x_gdd"               = "SD %*% GDD[cum]",
+  "SOS_trs.sos"            = "SOS[TRS]"
+)
+
+# =========================================================
+# PD sentence
+# =========================================================
+
+pd_corr_sentence <- paste0(
+  "The variables most strongly correlated with PD were ",
+  paste0(
+    label_map_pd[names(pd_corrs_sorted)],
+    " (r = ",
+    round(pd_corrs_sorted, 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure 6)."
+)
+
+cat(pd_corr_sentence, "\n")
+
+
+# =========================================================
+# HD sentence
+# =========================================================
+
+hd_corr_sentence <- paste0(
+  label_map_hd[names(hd_corrs_sorted)[1]],
+  " emerged as the variable most strongly correlated with HD (r = ",
+  round(hd_corrs_sorted[1], 2),
+  "), followed by ",
+  paste0(
+    label_map_hd[names(hd_corrs_sorted)[2:length(hd_corrs_sorted)]],
+    " (r = ",
+    round(hd_corrs_sorted[2:length(hd_corrs_sorted)], 2),
+    ")",
+    collapse = ", "
+  ),
+  " (Figure 7)."
+)
+
+cat(hd_corr_sentence, "\n")
+
+##-----------------------------
+#Instances UD less than PD 
+#------------------------------
+df_pd_rfe$UD.UD
+df_pd_rfe$PDDOY
+
+sum(df_pd_rfe$UD.UD < df_pd_rfe$PDDOY, na.rm = TRUE)
+phenology_df$UD.UD
+phenology_df$PDDOY
+df_pd_rfe$UD.UD[df_pd_rfe$UD.UD < df_pd_rfe$PDDOY]
+
+library(dplyr)
+library(ggplot2)
+
+# -----------------------------------------
+# 1. Identify problematic fields (UD < PD)
+# -----------------------------------------
+bad_fields <- df$Field_ID[
+  !is.na(df$UD.UD) &
+    !is.na(df$PDDOY) &
+    df$UD.UD < df$PDDOY
+]
+
+# -----------------------------------------
+# 2. Extract DOY + kNDVI for those fields
+# -----------------------------------------
+plot_df <- do.call(rbind, lapply(bad_fields, function(f) {
+  data.frame(
+    Field_ID = f,
+    DOY = vi_list_gt20[[f]]$DOY,
+    kNDVI = vi_list_gt20[[f]]$kNDVI
+  )
+}))
+
+# -----------------------------------------
+# 3. Attach UD and PD values
+# -----------------------------------------
+plot_df$UD <- df$UD.UD[match(plot_df$Field_ID, df$Field_ID)]
+plot_df$PD <- df$PDDOY[match(plot_df$Field_ID, df$Field_ID)]
+
+# -----------------------------------------
+# 4. Plot kNDVI time series
+# -----------------------------------------
+ggplot(plot_df, aes(x = DOY, y = kNDVI, group = Field_ID)) +
+  geom_line(alpha = 0.4) +
+  geom_vline(aes(xintercept = UD), color = "blue", linetype = "dashed") +
+  geom_vline(aes(xintercept = PD), color = "red", linetype = "dashed") +
+  facet_wrap(~Field_ID) +
+  labs(
+    title = "kNDVI Time Series for Fields where UD < PD",
+    x = "DOY",
+    y = "kNDVI"
+  ) +
+  theme_minimal()
 

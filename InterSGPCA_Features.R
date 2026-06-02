@@ -595,7 +595,7 @@ df_156 <- vi_list_gt20[[which(column_lengths == 156)[1]]]
 # Compare column names
 setdiff(names(df_157), names(df_156))
 
-
+vi_list_gt20notdaily<-vi_list_gt20
 # 3. Filter to growing season (parallel)
 #vi_list_gt20 <- pblapply(vi_list_gt20, filter_march_to_october, cl = cl)
 # 4. Convert to daily resolution (parallel)
@@ -839,8 +839,63 @@ vi_list_gt20[[1]]$PDDOY
 #-------------------------------------------------------
 #-------------------------------------------------------
 #-------------------------------------------------------
-#-------------------------------------------------------
+library(dplyr)
+library(lubridate)
+library(purrr)
 
+# Function: count real NDVI observations in Apr–Aug BEFORE interpolation
+count_apr_aug_obs <- function(df, vi_col = "kNDVI") {
+  
+  # Safety checks
+  if (!("Date" %in% names(df)) || !(vi_col %in% names(df))) {
+    return(NA)
+  }
+  
+  df <- df %>%
+    dplyr::mutate(
+      Date = as.Date(Date),
+      year = year(Date),
+      month = month(Date)
+    ) %>%
+    
+    # Keep rice growing season only (April–August)
+    dplyr::filter(month >= 4 & month <= 8)
+  
+  # Count ONLY valid satellite observations (non-NA)
+  n_obs <- sum(!is.na(df[[vi_col]]))
+  
+  return(n_obs)
+}
+
+# Apply to full VI list BEFORE any daily interpolation
+apr_aug_obs <- sapply(vi_list_gt20notdaily, count_apr_aug_obs, vi_col = "kNDVI")
+
+# Summary statistics
+summary(apr_aug_obs)
+
+# Create clean table for reporting
+apr_aug_table <- data.frame(
+  field_year = names(apr_aug_obs),
+  n_observations_apr_aug = as.numeric(apr_aug_obs)
+)
+
+# Sort for inspection
+apr_aug_table <- apr_aug_table %>%
+  arrange(n_observations_apr_aug)
+
+print(apr_aug_table)
+
+# Quick QC flag (important for your paper)
+apr_aug_table <- apr_aug_table %>%
+  mutate(
+    qc_flag = case_when(
+      n_observations_apr_aug < 7 ~ "LOW (risky for phenology)",
+      n_observations_apr_aug < 10 ~ "MODERATE",
+      TRUE ~ "GOOD"
+    )
+  )
+
+table(apr_aug_table$qc_flag)
 # 
 # 
 # ###############################################
